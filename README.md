@@ -24,6 +24,8 @@ APIs.
 
 | Path | What |
 |---|---|
+| `docs/plan.md` | **the route through the work**: what is built, in what order, how each piece is proved |
+| `docs/adr/0005-core-harness.md` | the core harness: the state machine, the tool contract, dispatch, the peer exchange |
 | `docs/adr/0004-quality-bar.md` | the quality bar and the budgets it is measured against |
 | `docs/adr/0003-core-scope.md` | how much of pi to take, and what "parity" means |
 | `docs/adr/0002-core-harness.md` | the architecture |
@@ -45,6 +47,11 @@ symmetric protocol that carries peer-initiated tool calls.
 
 In place now: the message and event algebras, the event stream with its five laws, and
 our own tool-parameter schema dialect — 1 907 B gzip so far, against a 30 000 B ceiling.
+
+The core is designed as a **pure transition function**: it performs no I/O and emits
+intents, the driver performs them, and the laws are properties of that function. The run
+is a six-state machine, the transcript is append-only with a derived context, and the
+tool dispatch policy is ours rather than inherited.
 
 Open, and recorded in the ADRs: whether the dialect ships as its own package; the
 coercion default; whether the reference implementation ships a TUI; the backend harness

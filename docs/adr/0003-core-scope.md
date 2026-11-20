@@ -49,7 +49,9 @@ Two more findings reshape the question rather than answer it:
 ### D15. The core is ours; upstream is a source of questions, not of answers
 
 > The budgets this decision is measured against, and the quality bar it is written
-> to, are in [ADR 0004](./0004-quality-bar.md) D19–D22. The decisive measurement:
+> to, are in [ADR 0004](./0004-quality-bar.md) D19–D22. How the core is actually
+> shaped — the state machine, the tool contract, the dispatch policy and the peer
+> exchange — is in [ADR 0005](./0005-core-harness.md) D24–D32. The decisive measurement:
 > upstream's agent core bundles to **22 923 B gzip** — 76 % of our 30 KB ceiling —
 > so depending on it was never a close call.
 
