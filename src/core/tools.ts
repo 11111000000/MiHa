@@ -55,9 +55,10 @@ export function toolRegistry(definitions: readonly ToolDefinition[]): ToolRegist
 	return registry;
 }
 
-/** One call, ready to run: the call itself and its validated arguments. */
+/** One call, ready to run: the tool, the call, and its validated arguments. */
 export interface ToolCallPlan {
 	readonly call: ToolCallBlock;
+	readonly tool: ToolDefinition;
 	readonly args: Readonly<Record<string, unknown>>;
 }
 
@@ -136,7 +137,7 @@ export function planDispatch(
 			}
 		}
 
-		const plan: ToolCallPlan = { call, args };
+		const plan: ToolCallPlan = { call, tool, args };
 		if (tool.concurrency === "exclusive") {
 			if (shared.length > 0) {
 				groups.push(shared);

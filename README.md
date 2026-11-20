@@ -45,8 +45,11 @@ fit **30 KB gzip**; in the browser the core runs in a Worker with the main threa
 host for DOM and storage; the frontend and backend agents exchange tasks over one
 symmetric protocol that carries peer-initiated tool calls.
 
-In place now: the message and event algebras, the event stream with its five laws, and
-our own tool-parameter schema dialect — 1 907 B gzip so far, against a 30 000 B ceiling.
+In place now: the message and event algebras, the event stream with its five laws, our
+own tool-parameter schema dialect, the tool contract and dispatch plan, the append-only
+transcript, the six-state machine and the driver — an agent now runs end to end against
+a scripted provider: 50 tests, 4 759 B gzip against a 30 000 B ceiling, zero runtime
+dependencies.
 
 The core is designed as a **pure transition function**: it performs no I/O and emits
 intents, the driver performs them, and the laws are properties of that function. The run

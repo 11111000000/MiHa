@@ -15,7 +15,8 @@
  * it costs the planner its purity — so it is a decision to make, not a detail.
  */
 
-import type { ToolCallBlock, ToolDefinition } from "./tools.ts";
+import type { ToolCallBlock } from "./messages.ts";
+import type { ToolDefinition } from "./tools.ts";
 
 export interface BeforeToolCallContext {
 	readonly call: ToolCallBlock;

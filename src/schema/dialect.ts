@@ -180,7 +180,7 @@ function validateObject(
 		if (schema.additional === false) {
 			return fail(child(path, name), "property is not allowed");
 		}
-		if (schema.additional === undefined) {
+		if (schema.additional === undefined || schema.additional === true) {
 			result[name] = extra;
 			continue;
 		}

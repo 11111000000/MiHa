@@ -23,7 +23,7 @@ const ROOT = resolve(import.meta.dirname, "..");
 const BUNDLE_LIMIT_BYTES = 30_000;
 const LAYER_LIMITS = {
 	root: 50,
-	core: 1000,
+	core: 1500,
 	schema: 500,
 	llm: 600,
 	exchange: 700,

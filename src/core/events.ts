@@ -14,24 +14,56 @@
  * lifecycle event — it may only describe what the provider said.
  */
 
-import type { AgentMessage, AssistantMessage, StopReason, ToolResult, ToolResultMessage, Usage } from "./messages.ts";
+import type {
+	AgentMessage,
+	AssistantMessage,
+	StopReason,
+	ToolResult,
+	ToolResultMessage,
+	Usage,
+} from "./messages.ts";
+
+/** How a run ended. Four different endings, and they are not the same thing. */
+export type Outcome =
+	| { readonly kind: "completed" }
+	| { readonly kind: "cancelled" }
+	| { readonly kind: "failed"; readonly error: unknown }
+	| { readonly kind: "limitReached"; readonly turns: number };
+
+export type MessageRole = "user" | "assistant" | "toolResult";
+
+/**
+ * The assistant message as it stands while it is still being streamed.
+ *
+ * It is not an `AssistantMessage`, because it has no stop reason and no final usage
+ * — a provisional value would be a lie dressed as a message.
+ */
+export interface PartialAssistantMessage {
+	readonly role: "assistant";
+	readonly content: readonly import("./messages.ts").ContentBlock[];
+}
 
 export type ProviderEvent =
 	| { readonly type: "text_delta"; readonly delta: string }
 	| { readonly type: "reasoning_delta"; readonly delta: string }
-	| { readonly type: "tool_call"; readonly id: string; readonly name: string; readonly arguments: string }
-	| { readonly type: "tool_arguments"; readonly id: string; readonly delta: string }
+	| { readonly type: "tool_call_start"; readonly id: string; readonly name: string }
+	| { readonly type: "tool_arguments_delta"; readonly id: string; readonly delta: string }
 	| { readonly type: "error"; readonly message: string }
 	| { readonly type: "done"; readonly stopReason: StopReason; readonly usage: Usage };
 
 export type AgentEvent =
 	| { readonly type: "agent_start" }
-	| { readonly type: "agent_end"; readonly messages: readonly AgentMessage[] }
+	| { readonly type: "agent_end"; readonly messages: readonly AgentMessage[]; readonly outcome: Outcome }
 	| { readonly type: "turn_start" }
 	| { readonly type: "turn_end"; readonly message: AgentMessage; readonly toolResults: readonly ToolResultMessage[] }
-	| { readonly type: "message_start"; readonly message: AgentMessage }
-	| { readonly type: "message_update"; readonly message: AgentMessage; readonly providerEvent: ProviderEvent }
-	| { readonly type: "message_end"; readonly message: AgentMessage }
+	| { readonly type: "message_start"; readonly id: string; readonly role: MessageRole }
+	| {
+			readonly type: "message_update";
+			readonly id: string;
+			readonly message: PartialAssistantMessage;
+			readonly providerEvent: ProviderEvent;
+	  }
+	| { readonly type: "message_end"; readonly id: string; readonly message: AgentMessage }
 	| {
 			readonly type: "tool_execution_start";
 			readonly toolCallId: string;
@@ -54,3 +86,6 @@ export type AgentEvent =
 	  };
 
 export type AgentEventType = AgentEvent["type"];
+
+/** The assistant message a stream ends with, for the host's convenience. */
+export type { AssistantMessage };

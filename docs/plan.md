@@ -56,29 +56,33 @@ validation failure with a path, a truncated argument string, a salvaged fragment
 parses but does not validate, a throwing tool, a host that blocks a call, a host that
 narrows a call's arguments, and an exclusive tool beside a shared one.
 
-### 3. The transcript and the projection
+### 3. The transcript and the projection — **done, except compaction**
 
-`src/core/transcript.ts` — append-only entries, the projection, the compaction marker.
+`src/core/transcript.ts` — 19 code lines. Append-only entries and the projection.
 The core emits append intents and never touches storage; the host performs the append
-and stamps the time.
+and stamps the time. The compaction marker is still to come.
 
 Proven by: laws T4 and the replay property — a run's transcript is a function of its
 inputs, and re-running the same inputs produces the same transcript.
 
-### 4. The state machine
+### 4. The state machine — **done**
 
-`src/core/run.ts` — six states, `step(state, input) → {state, outputs}`.
+`src/core/run.ts` — 441 code lines. Six states, `step(state, input) → {state, outputs}`.
 
-Proven by: the laws stated as properties of `step`; a golden trace per scenario; and a
-check that the reachable states contain no illegal pair of an unanswered call and a
-settled turn.
+Proven by: laws M1, M2, M3, M4 and T4 over a whole run — 8 end-to-end tests covering
+a rejected tool, a throwing tool, a provider failure, the turn limit and cancellation.
 
-### 5. The driver
+### 5. The driver — **done**
 
-`src/core/loop.ts` — performs the intents, feeds the inputs back, races cancellation.
+`src/core/loop.ts` — 126 code lines. Performs the intents, feeds the inputs back,
+races cancellation, merges abort signals without `AbortSignal.any`.
 
-Proven by: the same golden traces, driven end to end; and the cancellation property —
-a cancelled run reaches `finished` and never leaves a call unanswered.
+Proven by: the same end-to-end tests, driven through a scripted provider.
+
+**One bug this slice found.** A batch whose calls were *all* rejected had no groups to
+execute, so the driver had nothing to feed back and the batch never closed — the
+rejections never reached the transcript. The fix is in the core, not the driver: a batch
+with nothing to run is already answered, and closes where it was planned.
 
 ### 6. The provider layer
 

@@ -284,22 +284,31 @@ the run.
 
 ### D32. The module layout
 
-| Module | Lines | Holds |
-|---|---|---|
-| `core/transcript.ts` | 300 | append-only entries, the projection, the compaction marker |
-| `core/run.ts` | 350 | the state machine and `step` |
-| `core/loop.ts` | 200 | the driver: performs intents, feeds inputs |
-| `core/tools.ts` | 250 | the contract, the registry, validation, dispatch planning |
-| `core/permissions.ts` | 80 | the `beforeToolCall` seam |
-| `core/events.ts` | 60 | the two vocabularies |
-| `core/messages.ts` | 110 | the message algebra, without timestamps — the core has no clock |
-| `core/event-stream.ts` | 110 | the stream and its laws |
-| `schema/` | 260 | the dialect and its validator |
-| `llm/` | 600 | SSE, the call tracker, the argument parser, the OpenAI-compatible adapter |
-| `exchange/` | 700 | the peer protocol and the transports |
-| `worker/` | 500 | the worker host and the capability bridge |
-| `trace/` | 250 | the run record and record/replay — the transcript itself is the trace |
-| `ui/` | 800 | the registry, the spec, the patches |
+| Module | Planned | Built | Holds |
+|---|---|---|---|
+| `core/transcript.ts` | 300 | **19** | append-only entries and the projection. Far below the estimate: an append-only log needs almost no code |
+| `core/run.ts` | 350 | **441** | the state machine and `step` |
+| `core/loop.ts` | 200 | **126** | the driver: performs intents, feeds inputs |
+| `core/tools.ts` | 250 | **114** | the contract, the registry, validation, dispatch planning |
+| `core/permissions.ts` | 80 | **15** | the `beforeToolCall` seam |
+| `core/events.ts` | 60 | **60** | the two vocabularies |
+| `core/messages.ts` | 110 | **87** | the message algebra, without timestamps — the core has no clock |
+| `core/event-stream.ts` | 110 | **77** | the stream and its laws |
+| `core/json.ts` | — | **10** | parsing that cannot throw |
+| `schema/` | 260 | **258** | the dialect and its validator |
+| `llm/` | 600 | — | SSE, the call tracker, the argument parser, the OpenAI-compatible adapter |
+| `exchange/` | 700 | — | the peer protocol and the transports |
+| `worker/` | 500 | — | the worker host and the capability bridge |
+| `trace/` | 250 | — | the run record and record/replay — the transcript itself is the trace |
+| `ui/` | 800 | — | the registry, the spec, the patches |
+
+The built column is the count of code lines: not blank, and not starting with a comment
+marker. It is measured by `scripts/check-budget.mjs`, which is also what enforces the
+budgets.
+
+Two modules came out far below their estimate — the transcript and the permission seam —
+and one above: the state machine. An append-only log needs almost no code, which is
+the point of choosing it; the state machine is where the laws live, and laws cost.
 
 Every module is a layer in ADR 0002 D1's diagram. `core` imports `protocol` and
 nothing else; the layers below it never import upward.

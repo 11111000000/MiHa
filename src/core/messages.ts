@@ -71,6 +71,9 @@ export interface ToolResultMessage {
 
 export type Message = UserMessage | AssistantMessage | ToolResultMessage;
 
+/** A message as the agent core sees it. A host may widen this by declaration merging. */
+export type AgentMessage = Message;
+
 /** What a tool returns. `isError` is a value, not an exception (law M3). */
 export interface ToolResult {
 	readonly content: readonly (TextContent | ImageContent)[];

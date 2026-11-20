@@ -53,12 +53,16 @@ Three budgets, all checked in CI, all failures of the build:
 | Budget | Limit | What it covers |
 |---|---|---|
 | **Bundle** | **≤ 30 000 B gzip**, browser target, minified | everything a host application loads |
-| **Layer** | per-layer file counts and code LOC | `core` 1 000 LOC, `schema` 500, `llm` 600, `exchange` 700, `worker` 500, `trace` 400 |
+| **Layer** | per-layer file counts and code LOC | `core` 1 500 LOC, `schema` 500, `llm` 600, `exchange` 700, `worker` 500, `trace` 400 |
 | **Dependency** | **zero** runtime dependencies | the core imports nothing from npm |
 
 The layer budget is expressed in LOC rather than bytes because a byte budget is gamed by
 minification, while a LOC budget tracks how much code the browser must evaluate — the
 thing that actually costs. The byte budget stays as the outer wall.
+
+The layer budgets are the sums of the module budgets in
+[ADR 0005](./0005-core-harness.md) D32, so the two cannot drift apart. Exceeding one
+means a module is split or a feature is cut — not that the budget is raised.
 
 ### D20. Our own tool-parameter schema dialect, exact by construction
 

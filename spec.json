@@ -106,12 +106,12 @@
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
         "section": null,
-        "digest": "20d26a9eb7e4fe0a2fd09cc04f09db583d94b44e6ebf190863bb585b7e79489d",
+        "digest": "5f39d7818b1cba531846fc58b3fad361770f61f406601ced89f063a122650af2",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner directed that MiHa be its own harness and not a behavioural clone of pi: laws must carry derivations from the provider protocols, upstream's tests are not ported, and the session and trace formats are ours",
-          "at": 1795176997,
-          "previous_digest": "5a37836c72a21b8a8aff4b9839d83a61791a2fc726205c62ab7ca1b7a9d1bc32"
+          "reason": "Owner took the core design pass: the core is a pure transition system with a six-state machine, the transcript is append-only and appended by intent, the dispatch plan carries the tool it runs, and the layer budgets now reconcile with the module budgets",
+          "at": 1795180879,
+          "previous_digest": "20d26a9eb7e4fe0a2fd09cc04f09db583d94b44e6ebf190863bb585b7e79489d"
         }
       },
       "kind": "acceptance",
@@ -134,12 +134,12 @@
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
         "section": null,
-        "digest": "20d26a9eb7e4fe0a2fd09cc04f09db583d94b44e6ebf190863bb585b7e79489d",
+        "digest": "5f39d7818b1cba531846fc58b3fad361770f61f406601ced89f063a122650af2",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner directed that MiHa be its own harness and not a behavioural clone of pi: laws must carry derivations from the provider protocols, upstream's tests are not ported, and the session and trace formats are ours",
-          "at": 1795176997,
-          "previous_digest": "5a37836c72a21b8a8aff4b9839d83a61791a2fc726205c62ab7ca1b7a9d1bc32"
+          "reason": "Owner took the core design pass: the core is a pure transition system with a six-state machine, the transcript is append-only and appended by intent, the dispatch plan carries the tool it runs, and the layer budgets now reconcile with the module budgets",
+          "at": 1795180880,
+          "previous_digest": "20d26a9eb7e4fe0a2fd09cc04f09db583d94b44e6ebf190863bb585b7e79489d"
         }
       },
       "kind": "acceptance",
@@ -162,12 +162,12 @@
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
         "section": null,
-        "digest": "20d26a9eb7e4fe0a2fd09cc04f09db583d94b44e6ebf190863bb585b7e79489d",
+        "digest": "5f39d7818b1cba531846fc58b3fad361770f61f406601ced89f063a122650af2",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner directed that MiHa be its own harness and not a behavioural clone of pi: laws must carry derivations from the provider protocols, upstream's tests are not ported, and the session and trace formats are ours",
-          "at": 1795176997,
-          "previous_digest": "5a37836c72a21b8a8aff4b9839d83a61791a2fc726205c62ab7ca1b7a9d1bc32"
+          "reason": "Owner took the core design pass: the core is a pure transition system with a six-state machine, the transcript is append-only and appended by intent, the dispatch plan carries the tool it runs, and the layer budgets now reconcile with the module budgets",
+          "at": 1795180880,
+          "previous_digest": "20d26a9eb7e4fe0a2fd09cc04f09db583d94b44e6ebf190863bb585b7e79489d"
         }
       },
       "kind": "acceptance",
@@ -205,6 +205,32 @@
       "falsifier": "A call is planned and rejected at once or neither, a call with unparseable arguments reaches a group, a failure is reported as ordinary content, or an exclusive tool shares a group with another exclusive tool",
       "register": "fact",
       "control": "sed -i 's/if (tool.concurrency === \"exclusive\") {/if (false) {/' src/core/tools.ts",
+      "waiver": null
+    },
+    {
+      "id": "run-laws",
+      "text": "The state machine and the driver together keep laws M1, M2, M3, M4 and T4 over a whole run: every tool call of every batch receives exactly one result including on rejection, tool failure, provider error and cancellation; a call with arguments that did not arrive complete is never executed; a failed tool is a result carrying isError; a provider failure is an event rather than a throw; and the tool results are recorded in assistant order",
+      "scope": [
+        "src/core/run.ts", "src/core/loop.ts", "src/core/transcript.ts",
+        "test/e2e.test.ts"
+      ],
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0006-core-decisions.md",
+        "section": null,
+        "digest": "2f42a864bdbad94810fb6a8e28b18d120d1fd408ec853dbe7e31ef1969cee7e5",
+        "review": null
+      },
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        { "kind": "verifier", "spec": "bun test test/e2e.test.ts" }
+      ],
+      "falsifier": "A call is left unanswered on any path, a call with unparseable arguments reaches a group, a failure becomes ordinary content or a thrown error, or the results are recorded in completion order",
+      "register": "fact",
+      "control": "sed -i 's/const flushed = flushResults({ ...state, results }, outputs);/const flushed = { ...state, phase: \"settling\" as const, results: [] };/' src/core/run.ts",
       "waiver": null
     }
   ]

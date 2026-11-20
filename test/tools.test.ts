@@ -34,12 +34,15 @@ function call(id: string, name: string, args: unknown): ToolCallBlock {
 	return toolCall(id, name, typeof args === "string" ? args : JSON.stringify(args));
 }
 
-function described(plan: ReturnType<typeof planDispatch>): string[] {
+function described(plan: ReturnType<typeof planDispatch>): string {
 	return plan.groups.map((group) => group.map((entry) => entry.call.id).join("+")).join(" | ");
 }
 
-function rejections(plan: ReturnType<typeof planDispatch>): ToolResultMessage[] {
-	return [...plan.rejections];
+/** The one rejection of a plan, or a failure that says so. */
+function onlyRejection(plan: ReturnType<typeof planDispatch>): ToolResultMessage {
+	const [rejection] = plan.rejections;
+	if (!rejection) throw new Error("expected exactly one rejection");
+	return rejection;
 }
 
 describe("law M1 — every call receives exactly one result", () => {
@@ -60,14 +63,14 @@ describe("law M1 — every call receives exactly one result", () => {
 
 	test("a rejection is a result the model can read", () => {
 		const plan = planDispatch([call("1", "nosuch", {})], registry, 1);
-		const [rejection] = rejections(plan);
+		const rejection = onlyRejection(plan);
 		expect(rejection.isError).toBe(true);
 		expect(rejection.content[0]).toEqual({ type: "text", text: 'unknown tool "nosuch"' });
 	});
 
 	test("an invalid argument names the path that is wrong", () => {
 		const plan = planDispatch([call("1", "read_file", { path: 7 })], registry, 1);
-		const [rejection] = rejections(plan);
+		const rejection = onlyRejection(plan);
 		expect(rejection.isError).toBe(true);
 		expect(rejection.content[0]).toEqual({ type: "text", text: "/path: expected string, got number" });
 	});
@@ -80,9 +83,9 @@ describe("law M2 — a call whose arguments did not arrive complete never runs",
 
 		expect(plan.groups).toHaveLength(0);
 		expect(plan.rejections).toHaveLength(1);
-		expect(plan.rejections[0].content[0]).toEqual({
+		expect(onlyRejection(plan).content[0]).toEqual({
 			type: "text",
-			text: expect.stringContaining("not valid JSON") as unknown as string,
+			text: expect.stringContaining("not valid JSON"),
 		});
 	});
 
@@ -104,7 +107,7 @@ describe("law M2 — a call whose arguments did not arrive complete never runs",
 	test("the raw text survives in the transcript, whatever happened to it", () => {
 		const truncated = '{"path": "src/comp';
 		const plan = planDispatch([call("1", "read_file", truncated)], registry, 1);
-		expect(plan.rejections[0].toolCallId).toBe("1");
+		expect(onlyRejection(plan).toolCallId).toBe("1");
 		// the call itself is the provider's, and its text was never rewritten
 		expect(call("1", "read_file", truncated).argumentsText).toBe(truncated);
 	});
@@ -187,14 +190,14 @@ describe("the permission seam", () => {
 			reason: "the user refused",
 		}));
 		expect(plan.groups).toHaveLength(0);
-		expect(plan.rejections[0].content[0]).toEqual({ type: "text", text: "the user refused" });
+		expect(onlyRejection(plan).content[0]).toEqual({ type: "text", text: "the user refused" });
 	});
 
 	test("the hook may narrow the arguments, and the narrowing is re-validated", () => {
 		const plan = planDispatch([call("1", "read_file", { path: "a" })], registry, 1, (context) => ({
 			args: { path: "safe.txt" },
 		}));
-		expect(plan.groups[0][0].args).toEqual({ path: "safe.txt" });
+		expect(plan.groups[0]?.[0]?.args).toEqual({ path: "safe.txt" });
 	});
 
 	test("a narrowing that breaks the schema is refused rather than run", () => {
@@ -202,9 +205,9 @@ describe("the permission seam", () => {
 			args: { path: 42 },
 		}));
 		expect(plan.groups).toHaveLength(0);
-		expect(plan.rejections[0].content[0]).toEqual({
+		expect(onlyRejection(plan).content[0]).toEqual({
 			type: "text",
-			text: expect.stringContaining("host rewrote the arguments badly") as unknown as string,
+			text: expect.stringContaining("host rewrote the arguments badly"),
 		});
 	});
 
@@ -233,6 +236,6 @@ describe("the registry", () => {
 			},
 		]);
 		const plan = planDispatch([call("1", "count", { n: "42" })], coerced, 1);
-		expect(plan.groups[0][0].args).toEqual({ n: 42 });
+		expect(plan.groups[0]?.[0]?.args).toEqual({ n: 42 });
 	});
 });

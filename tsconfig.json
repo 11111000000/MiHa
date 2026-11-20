@@ -14,7 +14,7 @@
     "noFallthroughCasesInSwitch": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "types": []
+    "types": ["bun"]
   },
   "include": ["src", "test", "scripts"]
 }
