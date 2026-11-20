@@ -299,9 +299,14 @@ IndexedDB implementation: IndexedDB is a browser global, it belongs to the host
 application, and Genium already has an offline queue and a sync engine that MiHa should
 reuse rather than duplicate.
 
-The entry format follows pi's JSONL session format — a tree linked by `id`/`parentId` —
-so a session can be read by pi-compatible tooling. MiHa writes the format and reads it
-back, including the v1 and v2 shapes pi documented.
+The entry format is **ours**: an append-only log of entries with a projection, not
+pi's JSONL v3 tree. A copy of pi's format would carry pi's assumptions — a session
+header, a `parentId` chain, and the entries upstream's tools expect to find. Ours is
+what our exchange protocol and our trace need: entries that are immutable, a projection
+that derives the model context, and nothing that presupposes a terminal harness.
+
+The cost is stated plainly: a pi-written session is not a MiHa session. Reading one is
+a small, isolated adapter, and it is not in v1.
 
 Session branching, revert and MCP are **out of scope for v1**. Branching is cheap when
 it is wanted, and MCP is a protocol with authentication, transport and schema

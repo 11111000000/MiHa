@@ -16,12 +16,12 @@
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
         "section": null,
-        "digest": "84ce31dc692f952214195ba5a7b966b1af367741a0f91339fcbbd3ae39f27e42",
+        "digest": "6e776f0b59fcdd5fbfcd68a5bc0f145abc7be7e7f1191c72d14a85742ef634e1",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner reviewed the decision and directed its amendment: D2 replaced by a re-derivation from upstream's specification, D7 amended, and the aim widened to cover the implementation and its budgets",
-          "at": 1795174267,
-          "previous_digest": "b5d68ac224519d92d48a471a1db966080ad12b17561624aa069a2c551cbaf359"
+          "reason": "Owner directed that MiHa be its own harness and not a behavioural clone of pi: laws must carry derivations from the provider protocols, upstream's tests are not ported, and the session and trace formats are ours",
+          "at": 1795176997,
+          "previous_digest": "84ce31dc692f952214195ba5a7b966b1af367741a0f91339fcbbd3ae39f27e42"
         }
       },
       "kind": "acceptance",
@@ -44,12 +44,12 @@
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
         "section": null,
-        "digest": "84ce31dc692f952214195ba5a7b966b1af367741a0f91339fcbbd3ae39f27e42",
+        "digest": "6e776f0b59fcdd5fbfcd68a5bc0f145abc7be7e7f1191c72d14a85742ef634e1",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner reviewed the decision and directed its amendment: D2 replaced by a re-derivation from upstream's specification, D7 amended, and the aim widened to cover the implementation and its budgets",
-          "at": 1795174267,
-          "previous_digest": "b5d68ac224519d92d48a471a1db966080ad12b17561624aa069a2c551cbaf359"
+          "reason": "Owner directed that MiHa be its own harness and not a behavioural clone of pi: laws must carry derivations from the provider protocols, upstream's tests are not ported, and the session and trace formats are ours",
+          "at": 1795176997,
+          "previous_digest": "84ce31dc692f952214195ba5a7b966b1af367741a0f91339fcbbd3ae39f27e42"
         }
       },
       "kind": "acceptance",
@@ -75,12 +75,12 @@
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
         "section": null,
-        "digest": "84ce31dc692f952214195ba5a7b966b1af367741a0f91339fcbbd3ae39f27e42",
+        "digest": "6e776f0b59fcdd5fbfcd68a5bc0f145abc7be7e7f1191c72d14a85742ef634e1",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner reviewed the decision and directed its amendment: D2 replaced by a re-derivation from upstream's specification, D7 amended, and the aim widened to cover the implementation and its budgets",
-          "at": 1795174267,
-          "previous_digest": "b5d68ac224519d92d48a471a1db966080ad12b17561624aa069a2c551cbaf359"
+          "reason": "Owner directed that MiHa be its own harness and not a behavioural clone of pi: laws must carry derivations from the provider protocols, upstream's tests are not ported, and the session and trace formats are ours",
+          "at": 1795176997,
+          "previous_digest": "84ce31dc692f952214195ba5a7b966b1af367741a0f91339fcbbd3ae39f27e42"
         }
       },
       "kind": "acceptance",
@@ -106,8 +106,13 @@
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
         "section": null,
-        "digest": "5a37836c72a21b8a8aff4b9839d83a61791a2fc726205c62ab7ca1b7a9d1bc32",
-        "review": null
+        "digest": "20d26a9eb7e4fe0a2fd09cc04f09db583d94b44e6ebf190863bb585b7e79489d",
+        "review": {
+          "by": "petr p.b.kosov@yandex.ru",
+          "reason": "Owner directed that MiHa be its own harness and not a behavioural clone of pi: laws must carry derivations from the provider protocols, upstream's tests are not ported, and the session and trace formats are ours",
+          "at": 1795176997,
+          "previous_digest": "5a37836c72a21b8a8aff4b9839d83a61791a2fc726205c62ab7ca1b7a9d1bc32"
+        }
       },
       "kind": "acceptance",
       "phase": "pre-merge",
@@ -129,8 +134,13 @@
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
         "section": null,
-        "digest": "5a37836c72a21b8a8aff4b9839d83a61791a2fc726205c62ab7ca1b7a9d1bc32",
-        "review": null
+        "digest": "20d26a9eb7e4fe0a2fd09cc04f09db583d94b44e6ebf190863bb585b7e79489d",
+        "review": {
+          "by": "petr p.b.kosov@yandex.ru",
+          "reason": "Owner directed that MiHa be its own harness and not a behavioural clone of pi: laws must carry derivations from the provider protocols, upstream's tests are not ported, and the session and trace formats are ours",
+          "at": 1795176997,
+          "previous_digest": "5a37836c72a21b8a8aff4b9839d83a61791a2fc726205c62ab7ca1b7a9d1bc32"
+        }
       },
       "kind": "acceptance",
       "phase": "pre-merge",
@@ -152,8 +162,13 @@
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
         "section": null,
-        "digest": "5a37836c72a21b8a8aff4b9839d83a61791a2fc726205c62ab7ca1b7a9d1bc32",
-        "review": null
+        "digest": "20d26a9eb7e4fe0a2fd09cc04f09db583d94b44e6ebf190863bb585b7e79489d",
+        "review": {
+          "by": "petr p.b.kosov@yandex.ru",
+          "reason": "Owner directed that MiHa be its own harness and not a behavioural clone of pi: laws must carry derivations from the provider protocols, upstream's tests are not ported, and the session and trace formats are ours",
+          "at": 1795176997,
+          "previous_digest": "5a37836c72a21b8a8aff4b9839d83a61791a2fc726205c62ab7ca1b7a9d1bc32"
+        }
       },
       "kind": "acceptance",
       "phase": "pre-merge",

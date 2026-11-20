@@ -310,3 +310,37 @@ Source: research 03 sections 6, 8, 9, 12, 13, 14, 15; LOC counted in
 | Is "full pi parity" one thing? | No — it is two independent harnesses with different session models, one of them Node-only and the other state-first |
 | Is "parity via extension" reachable? | Not as an extension. Upstream's extension system is a Node module loader. As a **sibling package**, ~940 LOC is reachable; the Node-only parts are better taken from upstream verbatim |
 | Does the frontend case need parity? | No. The frontend needs the loop, the tool contract, the event vocabulary and the peer exchange. Parity belongs to the backend harness, which can afford 82 000 LOC and can simply depend on upstream |
+
+## 17. Protocol facts against upstream's preferences
+
+Section 8 counted sixteen behaviours that are not derivable from first principles. That
+count conflated two different things, and the distinction matters more than the count:
+some of those behaviours are **facts about how LLM provider protocols behave**, and every
+correct harness must have them. The rest are **upstream's choices** — perfectly
+defensible, but not laws, and a harness that copies them is a clone.
+
+| # | Behaviour | Class | Why | MiHa's answer |
+|---|---|---|---|---|
+| F1 | A tool call must be answered by exactly one tool result | **protocol fact** | the provider rejects the next request otherwise — upstream has to repair orphans in the payload builder (`pi-ai/src/api/transform-messages.ts:242-247`), which is proof the fact is real | law M1, enforced in **two** places: the loop and the transcript writer. Upstream enforces it in one and leaks the other |
+| F2 | A call whose arguments were cut by the output-token limit is not a call | **protocol fact** | the limit truncates the stream mid-JSON; upstream's parser *salvages* the fragment into arguments that parse and validate (`pi-ai/src/utils/json-parse.ts:106-120`), which is why it fails the whole message (`agent-loop.ts:488-513`) | law M2, detected differently: MiHa keeps the raw argument text and parses it strictly **once**, so incompleteness shows up as a parse failure rather than a stop-reason heuristic. Strictly stronger than upstream's rule |
+| F3 | A provider request can fail at any point | **protocol fact** | the transcript must stay consistent across a failure | law M4: a provider failure is an event, and the pairing survives it |
+| F4 | Tool arguments arrive as a JSON string; streamed arguments arrive as fragments | **protocol fact** | the wire format | our dialect parses the argument string; fragments accumulate as text |
+| F5 | An abort must not leave a dangling call | **protocol fact** | the same requirement as F1, under cancellation | part of law M1 |
+| F6 | The context window is finite | **protocol fact** | a long session must be reducible | compaction, our own design |
+| F7 | One assistant message can carry several calls with interleaved arguments | **protocol fact** | the wire format | we track calls by id and keep them in assistant order |
+| T1 | If any tool in a batch is sequential, the whole batch is sequential (`agent-loop.ts:526-531`) | **preference** | a design choice, two alternatives are equally defensible | **we choose differently**: an exclusive tool runs alone, while the shared tools around it still run in parallel. "Exclusive" means "must not interleave with another exclusive tool", not "serialise the turn" |
+| T2 | Steering is polled at exactly three points (`agent-loop.ts:185`, `:213-215`, `:304`) | **preference** | an implementation detail of upstream's loop shape | we state the *semantics* — a steering message is delivered at the next tool-call boundary — and implement them our way. The poll count is not a law |
+| T3 | `finishTurn` continuation semantics (`agent-loop.ts:303-307`, `:319-323`) | **preference** | upstream's policy for "one more request" | we have no such hook. The turn ends when there are no tool calls and no queued messages |
+| T4 | Tool declarations compared by JSON round-trip (`pi-ai/src/utils/transcript.ts:132-142`) | **preference** | an artefact of upstream's transcript model | we have no declaration model in v1 |
+| T5 | `durationMs` excludes hook time (`agent-loop.ts:831-832`) | **preference** | a definition | ours measures the tool's own execution and nothing else |
+| T6 | `replay`, `outputSchema` merge rules, `AgentToolResult.usage` | **preference** | upstream's details | dropped |
+| T7 | The event vocabulary, and a whole-message snapshot on every provider event | **preference** | upstream's data model | ours: two separate vocabularies, deltas only from an adapter |
+| T8 | The tool-loadout announcement mechanism (`agent-loop.ts:342-372`) | **preference** | upstream's transcript model | in v1 the tool set is fixed for a run. A mid-run change is a later feature, and we say why |
+| T9 | The `Agent` facade's ownership of state | **preference** | upstream's shape | ours owns less; the host may own the transcript |
+
+So the count from section 8 splits: **seven protocol facts** that any harness must
+satisfy, and **nine preferences** that a new harness is free — and ought — to decide
+differently.
+
+This is the distinction that makes "our own harness" and "correct harness" compatible.
+A law that MiHa states without a derivation is upstream's preference wearing our name.

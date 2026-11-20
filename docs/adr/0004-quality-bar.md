@@ -102,31 +102,47 @@ Each property is stated so that a machine can check it.
 The point of Q1–Q12 is that "reference implementation" is a **checkable property of a
 repository**, not a claim in a README. A reader can clone it and run the checks.
 
-### D22. The law set of the core
+### D22. The law set of the core, with its derivations
 
-The core's correctness is stated as laws, each with a test. These are the laws a
-reference implementation owes its reader.
+The core's correctness is stated as laws, each with a test. Two kinds of law, and the
+distinction is the whole point:
 
-**Stream laws** (`S1`–`S5`)
+- A **derived law** follows from a fact about the provider protocols. It is not a matter
+  of taste, and it is not inherited from anyone — it is argued from the protocol.
+- A **chosen law** is a policy we decide. It is stated because a policy that is not
+  written down is a policy nobody can rely on.
 
-- `S1` events are delivered in push order, each exactly once.
-- `S2` `result()` resolves exactly once, with the value extracted from the terminal event.
-- `S3` events pushed after the terminal event are ignored.
-- `S4` iteration ends after the terminal event has been delivered.
-- `S5` no event is lost between a push and the start of iteration.
+A law with no derivation is a preference wearing the name of a law. Every law below has
+one.
 
-**Message laws** (`M1`–`M3`)
+**Derived laws** — from the protocol facts in
+[research 03](../research/03-pi-core-teardown.md) §17
 
-- `M1` a tool call is never left without a tool result — not on abort, not on
-  truncation, not on provider error.
-- `M2` a tool call from a message whose stop reason is `length` is never executed.
-- `M3` a tool that fails is a result with `isError`, never ordinary content.
+| Law | Derivation | Test |
+|---|---|---|
+| **M1** every tool call receives exactly one tool result — on abort, on truncation, on provider error, on an unknown tool | the provider rejects the next request whose call has no result (F1) | one assertion per failure path |
+| **M2** a call whose arguments did not arrive complete is never executed; it is answered with an error asking the model to re-issue | the output-token limit truncates the argument stream mid-JSON (F2) | a call cut at every offset is answered and never executed |
+| **M3** a failed tool is a result with `isError`, never ordinary content | the model must be able to read the failure and recover | a throwing tool and an `isError` tool both produce a result |
+| **M4** a provider failure is an event, and the pairing of M1 survives it | a request can fail at any point (F3) | a failure mid-batch leaves every call answered |
 
-**Schema laws** (`C1`–`C3`)
+**Chosen laws** — our policy, stated so that it can be relied on
 
-- `C1` the validator accepts every value the dialect admits.
-- `C2` the validator rejects every value the dialect does not admit, with a path.
-- `C3` coercion happens only where the dialect says so.
+| Law | Choice | Why |
+|---|---|---|
+| **S1** events are delivered in push order, each exactly once | the stream is the only channel; reordering would make a trace unreadable | — |
+| **S2** `result()` resolves exactly once, with the terminal event's value | a run has one outcome, and a second resolution would be a bug that hides | — |
+| **S3** events pushed after the terminal event are ignored | the run is over; there is nothing to deliver them to | — |
+| **S4** iteration ends after the terminal event has been delivered | a consumer must be able to stop on the terminal event without draining a buffer | — |
+| **S5** no event is lost between a push and the start of iteration | the producer may run ahead of the consumer | — |
+| **T1** an exclusive tool runs alone; shared tools around it still run in parallel | "exclusive" means *must not interleave with another exclusive tool*, not *serialise the turn*. Upstream takes the stricter reading; we take the useful one | — |
+| **T2** a steering message is delivered at the next tool-call boundary | delivering mid-batch would interrupt a tool that has already started; delivering after the run ends would lose it | — |
+| **T3** the turn ends when there are no tool calls and no queued messages | one rule, no continuation hook: the loop's exit is a consequence of its state | — |
+| **T4** tool results are recorded in assistant order | the transcript must replay; a live view can still follow completion order, and the two are separate concerns | — |
+| **C1** the dialect accepts every value it admits | a dialect we implement completely must not reject its own values | — |
+| **C2** the dialect rejects every value it does not admit, with a path | the model can only fix an argument it can locate | — |
+| **C3** coercion happens only where the dialect says so | implicit coercion is how a schema becomes unpredictable | — |
+
+Each law has one test, and each test fails when the law fails.
 
 ### D23. No fork, no upstream dependency, and attribution where it is due
 

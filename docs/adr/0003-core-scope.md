@@ -46,72 +46,68 @@ Two more findings reshape the question rather than answer it:
 
 ## Decision
 
-### D15. The core is **re-derived**, not ported — and upstream is the specification
+### D15. The core is ours; upstream is a source of questions, not of answers
 
 > The budgets this decision is measured against, and the quality bar it is written
 > to, are in [ADR 0004](./0004-quality-bar.md) D19–D22. The decisive measurement:
 > upstream's agent core bundles to **22 923 B gzip** — 76 % of our 30 KB ceiling —
 > so depending on it was never a close call.
 
-The agent core is written for MiHa's job. Upstream pi is read as the **specification**,
-and its **test suite** is the part that transfers.
+The agent core is written for MiHa's job. Upstream pi is read as a **checklist of edge
+cases we might not have thought of** — not as a specification, not as a dependency, and
+not as a fork.
 
-The split, measured against upstream (research 03 §6):
+The split that makes this precise is in [research 03](../research/03-pi-core-teardown.md)
+§17: seven behaviours are **facts about how provider protocols behave** and every correct
+harness must have them; nine are **upstream's preferences**, defensible but not laws.
 
-| Part | LOC | What happens to it |
+| | Count | What MiHa does |
 |---|---|---|
-| **Pasted** | ~78 | `createErrorToolResult`, `createToolResultMessage`, the tool lifecycle emitters, `shouldTerminateToolBatch`, `withToolChanges`, the pending-message queue. Even these need renamed types |
-| **Transcribed** | ~250–290 | the parallel and sequential executors, the prepared-call executor, the tool preparation pipeline, the truncated-message guard, the batch dispatcher. Control flow preserved, types re-derived |
-| **Re-derived** | ~435–625 | the narrow type surface, the turn loop, the provider call and stream assembly, the tool-set diff, the state facade |
-| **Total** | **≈ 765–995** code LOC | against upstream's 1 437 for the same territory |
+| Protocol facts | 7 | states them as laws, with the derivation |
+| Upstream preferences | 9 | decides each one, and where it differs, says so |
 
-Budget: **1 000 code LOC for the core**, with a per-module budget enforced the way
-ADR 0002 D13 requires — a file count per entry point, plus a byte budget.
+Where MiHa differs from upstream, the difference is a decision, not an accident:
 
-Consequences of re-deriving rather than copying:
-
-- MiHa's types are its own. `AgentTool` carries a plain JSON Schema, not a
-  `Static<TParameters>` derived from a schema library. That is the ~75 % reduction of
-  the type surface, and it is what removes the coupling to pi-ai and pi-schema.
-- MiHa's provider event type is thin — deltas, no whole-message `partial` snapshot on
-  every variant. That is what lets the relay strip whatever it likes and shrinks the
-  client-side reconstruction from 138 LOC to roughly 30–50 (research 03 §4).
-- MiHa inherits **no** upstream defect and gains **no** upstream fix automatically.
-  That is the price, and D16 is the mitigation.
-
-### D16. Development order: the conformance suite first
-
-The single highest-leverage transfer from upstream is not code — it is **4 238 lines of
-browser-safe tests** that encode the sixteen non-derivable behaviours as executable
-assertions, eight of which fail silently.
-
-So the order is inverted from the usual:
-
-1. **Port upstream's tests first**, re-pointed at MiHa's types, red against a stub.
-2. Implement until they are green, function by function.
-3. Only then add what MiHa needs that upstream does not have — the capability bridge,
-   the peer exchange, the trace and record/replay.
-
-The specific upstream behaviours to encode as assertions, because each is a silent
-failure if re-derived from scratch (research 03 §8):
-
-| Behaviour | Upstream assertion |
+| Upstream | MiHa |
 |---|---|
-| a tool call from a `length`-truncated message is never executed | `agent-loop.test.ts:509` |
-| every call in an aborted batch still receives exactly one result | `agent-loop.test.ts:1003`, `:1034` |
-| `tool_execution_end` in completion order, tool results in source order | `agent-loop.test.ts:721` |
-| one sequential tool forces the whole batch sequential | `agent-loop.test.ts:920`, `:1072` |
-| the steering queue is polled at exactly three points | `agent-loop.test.ts:1581` |
-| the tool loadout change is announced, with its three merge cases | `agent.test.ts:164`, `:212`, `:247` |
-| a dropped provider connection is an error, not a hang | `proxy.test.ts:99` |
+| an exclusive tool serialises the whole batch (`agent-loop.ts:526-531`) | an exclusive tool runs alone; shared tools around it still run in parallel |
+| steering polled at exactly three points | the *semantics* are stated — delivery at the next tool-call boundary — and implemented our way |
+| `finishTurn` forces one more request | no such hook: the turn ends when there are no tool calls and no queued messages |
+| a whole-message snapshot on every provider event | two vocabularies, deltas only from an adapter |
+| the tool loadout may change mid-turn | fixed for the run in v1; a mid-run change is a later feature, deliberately |
 
-And two upstream behaviours MiHa must **not** inherit (research 03 §10):
+A law that MiHa states without a derivation is upstream's preference wearing our name.
+So every law carries its derivation, and the test proves the consequence of the
+derivation rather than a copied assertion.
 
-- The error/aborted hard exit must not drop tool calls without results. Upstream is
-  saved by pi-ai's payload repair; MiHa has no such net, and its transcripts cross a
-  peer link.
-- The raw loop entry point must always terminate. Upstream's `agentLoop()` has no
-  `.catch()` and can leave the result promise pending forever.
+### D16. Every law states its derivation, and the tests are ours
+
+The test suite is written from scratch. **No upstream test is ported.** A ported test
+would make MiHa's behaviour upstream's behaviour, which is the opposite of the decision.
+
+What transfers is the *question*, not the *answer*: upstream's suite is the most
+complete list we know of edge cases a loop must handle, and it is worth reading to ask
+"what would happen here?" — but the answer is ours, and where ours differs, the law
+says so.
+
+The discipline:
+
+1. **Every law names the protocol fact it derives from.** A law with no derivation is
+   either a mistake or an upstream preference in disguise.
+2. **Every law is falsifiable on its own terms**, with a test that fails when the law
+   fails — not a test copied from elsewhere.
+3. **Where our behaviour differs from upstream's, the law says so**, and the reason is
+   recorded.
+
+The laws, their derivations, and the differences from upstream:
+
+| Law | Derivation | Differs from upstream? |
+|---|---|---|
+| M1 every call gets exactly one result | the provider rejects a request whose tool call has no result (F1) | upstream repairs orphans in the payload builder; we enforce it in the loop **and** the transcript writer |
+| M2 an incomplete call is never executed | the output-token limit truncates the argument stream mid-JSON (F2) | upstream detects it by stop reason; we detect it by a strict parse of the raw argument text — stronger, and independent of the provider's salvage behaviour |
+| M3 a failed tool is a result, not ordinary content | the model must be able to recover | upstream allows both a throw and `isError`; we allow both, and keep `details` in both |
+| M4 a provider failure is an event, and the pairing survives it | a request can fail at any point (F3) | upstream drops the calls of an errored message; we answer them, because our transcripts cross a peer link |
+| S1–S5 the stream's laws | the stream is the only channel between the core and the host | upstream's stream has no `fail()`; ours has one for host-side faults, and provider failures stay events |
 
 ### D17. "Parity" means interoperability, not feature parity — and the backend harness is a separate concern
 
@@ -123,9 +119,18 @@ parity as *feature parity inside the core*.
 
 | Axis | What it means | How |
 |---|---|---|
-| Protocol | a pi-shaped host works against MiHa's core | the `AgentEvent` union keeps upstream's names and shape; the tool contract keeps upstream's field names |
-| Data | a session written by one side is readable by the other | the entry format follows pi's JSONL session format, including the v1 and v2 shapes |
-| Composition | pi's higher layers can sit on top | MiHa's core exports the same entry points pi's do — `Agent`, `agentLoop`, `runToolCall`, `setDefaultStreamFn` — with the same names |
+| Between our own sides | the frontend and the backend are the same implementation | one event vocabulary, one session format, one protocol — ours |
+| Data at a distance | a trace written on one side is readable on the other | one trace format, ours, specified as part of the exchange protocol |
+| Cost of naming | event names that are generic are kept generic | `agent_start`, `turn_end`, `tool_execution_end` are the natural names and cost nothing; names that encode upstream's *model* are not kept — ours is `providerEvent`, not `assistantMessageEvent` |
+
+**What we give up.** A host written against pi's core does not drop into MiHa, and a
+session written by pi is not a MiHa session. That is the cost of being our own harness,
+and it is paid knowingly: the value is in the design being ours, not in the
+interoperability.
+
+**What we do not give up.** The vocabulary that is free, and the ability to read a pi
+session if that ever matters — a reader for a foreign format is a small, isolated
+adapter, and it is not in v1.
 
 That is what "the same MiHa runs on both sides" actually needs. It is not feature
 parity, and it does not require pi's catalogue, OAuth, MCP, package manager or TUI.
