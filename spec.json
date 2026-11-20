@@ -1,0 +1,87 @@
+{
+  "schema_version": 5,
+  "goal": {
+    "text": "The stage-1 deliverable of MiHa is the architectural decision record, and every statement in it stands up: the document graph resolves, every decision is defined and referenced, and every number carries a source",
+    "scope": [ "docs/", "scripts/", "README.md" ],
+    "by": "petr p.b.kosov@yandex.ru",
+    "at": 1795139094,
+    "reason": null
+  },
+  "claims": [
+    {
+      "id": "docs-links-resolve",
+      "text": "Every relative document link and every ADR supersedes target in the decision record resolves to a file that exists, and the supersedes chain terminates without looping",
+      "scope": [ "docs/", "scripts/check-docs.mjs", "README.md" ],
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0002-scenario-runtime.md",
+        "section": null,
+        "digest": "091efc0a0afb51ffd1924799bf7ad31776c4486cb825029d1fdcf0d59f3c8b07",
+        "review": null
+      },
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        { "kind": "verifier", "spec": "bun scripts/check-docs.mjs links" }
+      ],
+      "falsifier": "A document links to a file that does not exist, or an ADR names a missing or looping supersedes target",
+      "register": "fact",
+      "control": "printf '\\n[missing decision](docs/adr/9999-absent.md)\\n' >> README.md",
+      "waiver": null
+    },
+    {
+      "id": "decisions-well-formed",
+      "text": "Every decision label referenced anywhere in the documentation is defined by an ADR heading, each ADR's labels are contiguous from D1, and no ADR defines decisions that nothing else references",
+      "scope": [ "docs/adr/", "scripts/check-docs.mjs" ],
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0002-scenario-runtime.md",
+        "section": null,
+        "digest": "091efc0a0afb51ffd1924799bf7ad31776c4486cb825029d1fdcf0d59f3c8b07",
+        "review": null
+      },
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        {
+          "kind": "verifier",
+          "spec": "bun scripts/check-docs.mjs decisions"
+        }
+      ],
+      "falsifier": "A referenced decision label has no definition, an ADR skips or repeats a label, or an ADR contains decisions that nothing else references",
+      "register": "fact",
+      "control": "printf '\\nSee D99 for the details.\\n' >> docs/adr/0002-scenario-runtime.md",
+      "waiver": null
+    },
+    {
+      "id": "measurements-attributed",
+      "text": "Every measurement stated in the research documents carries a source: either a file and line, a URL, or a caption directly above the table that declares where the numbers come from",
+      "scope": [ "docs/research/", "scripts/check-docs.mjs" ],
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0002-scenario-runtime.md",
+        "section": null,
+        "digest": "091efc0a0afb51ffd1924799bf7ad31776c4486cb825029d1fdcf0d59f3c8b07",
+        "review": null
+      },
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        {
+          "kind": "verifier",
+          "spec": "bun scripts/check-docs.mjs attribution"
+        }
+      ],
+      "falsifier": "A table row states a measurement with no source in the row and no source caption above its table",
+      "register": "fact",
+      "control": "sed -i '/^Source: measured on this machine against/,+3d' docs/research/02-scenario-runtime-landscape.md",
+      "waiver": null
+    }
+  ]
+}
