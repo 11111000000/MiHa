@@ -27,7 +27,7 @@ frontend application          backend peer
 | # | Property | Where it is decided | How it is checked |
 |---|---|---|---|
 | 1 | **Small** — the browser bundle fits 30 KB gzip | ADR 0004 D19 | `bun scripts/check-budget.mjs` |
-| 2 | **Correct** — every law has a derivation and a test | ADR 0004 D22, ADR 0005 D24–D28 | `bun test` + the math-coding claims |
+| 2 | **Correct** — every law has a derivation and a test | ADR 0004 D22, ADR 0005 D24–D28, ADR 0006 | `bun test` + the math-coding claims |
 | 3 | **Simple** — the core performs no I/O, the run is a small state machine | ADR 0005 D24, D25 | the state machine has six states and no hidden control flow |
 | 4 | **Functional** — the whole class of agent tasks: a loop with tools | ADR 0005 D26–D29 | the golden traces of the scenarios |
 | 5 | **Decentralised** — a peer may hand work over and may call back | ADR 0005 D30 | the exchange conformance suite |
@@ -57,6 +57,8 @@ argument string, a throwing tool, an exclusive tool beside a shared one.
 ### 3. The transcript and the projection
 
 `src/core/transcript.ts` — append-only entries, the projection, the compaction marker.
+The core emits append intents and never touches storage; the host performs the append
+and stamps the time.
 
 Proven by: laws T4 and the replay property — a run's transcript is a function of its
 inputs, and re-running the same inputs produces the same transcript.
@@ -104,7 +106,8 @@ including a peer-initiated tool call answered by the delegator.
 
 ### 9. The trace and record/replay
 
-`src/trace/` — the trace format, the cassette, the replay mode.
+`src/trace/` — the run record, the cassette, the replay mode. The transcript itself is
+the trace: no second format.
 
 Proven by: a recorded run replays to the same transcript; a diverging run is reported
 as a divergence with the first differing input.
@@ -124,6 +127,7 @@ same spec rendered twice gives the same tree.
 | how much of pi to take, and what parity means | `docs/adr/0003-core-scope.md` |
 | the quality bar and the budgets | `docs/adr/0004-quality-bar.md` |
 | the core harness: state machine, tools, dispatch, exchange | `docs/adr/0005-core-harness.md` |
+| the four decisions of the design pass | `docs/adr/0006-core-decisions.md` |
 | what was read and measured | `docs/research/` |
 
 ## The method

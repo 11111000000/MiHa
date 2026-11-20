@@ -51,7 +51,8 @@ export type Input =
 export type Output =
   | { readonly kind: "event"; readonly event: AgentEvent }
   | { readonly kind: "provider_request"; readonly request: ProviderRequest }
-  | { readonly kind: "tool_plan"; readonly plan: ToolPlan };
+  | { readonly kind: "tool_plan"; readonly plan: ToolPlan }
+  | { readonly kind: "append"; readonly entry: TranscriptEntry };
 
 export type Step = { readonly state: RunState; readonly outputs: readonly Output[] };
 
@@ -120,6 +121,11 @@ Two properties of this shape are worth stating:
   a half state.
 
 ### D26. The transcript is append-only, and the context is derived from it
+
+> The transcript is also the **durable record** and the source of truth; everything else
+> is a projection of it. See [ADR 0006](./0006-core-decisions.md) D29 and D31 — in
+> particular, the core never writes to storage: it emits an append intent, and the host
+> performs it and may stamp the time.
 
 The transcript is an append-only list of entries. Nothing is ever rewritten; the model
 context is a **projection** of the transcript, not a second copy of it.
@@ -272,13 +278,13 @@ the run.
 | `core/tools.ts` | 250 | the contract, the registry, validation, dispatch planning |
 | `core/permissions.ts` | 80 | the `beforeToolCall` seam |
 | `core/events.ts` | 60 | the two vocabularies |
-| `core/messages.ts` | 120 | the message algebra |
+| `core/messages.ts` | 110 | the message algebra, without timestamps — the core has no clock |
 | `core/event-stream.ts` | 110 | the stream and its laws |
 | `schema/` | 260 | the dialect and its validator |
 | `llm/` | 600 | SSE, the call tracker, the argument parser, the OpenAI-compatible adapter |
 | `exchange/` | 700 | the peer protocol and the transports |
 | `worker/` | 500 | the worker host and the capability bridge |
-| `trace/` | 400 | the trace format and record/replay |
+| `trace/` | 250 | the run record and record/replay — the transcript itself is the trace |
 | `ui/` | 800 | the registry, the spec, the patches |
 
 Every module is a layer in ADR 0002 D1's diagram. `core` imports `protocol` and
@@ -293,6 +299,8 @@ nothing else; the layers below it never import upward.
 - One implementation serves the page, the worker and the server. The peer protocol is
   symmetric because both sides run the same code.
 - The core cannot accidentally perform I/O: the type system does not offer it a way to.
+  It emits three kinds of intent — provider request, tool plan, transcript append — and
+  performs none of them ([ADR 0006](./0006-core-decisions.md) D31).
 - The dispatch policy, the pairing invariant and the truncated-call rule live in one
   place, and the transcript writer is a second line of defence for both.
 
@@ -335,12 +343,7 @@ nothing else; the layers below it never import upward.
 
 ## Open questions for the owner
 
-1. **The transcript's persistence.** Is the transcript the durable record, with the
-   session state derived from it — or is a separate session store the source of truth
-   and the transcript only the model's view?
-2. **The provider request's shape.** Does MiHa ask the provider for a plain list of
-   messages, or for a structured request the adapter lowers?
-3. **Whether the core may read a clock.** A pure core takes the clock from the host;
-   an alternative is to let the core read one and give up the last of the purity.
-4. **How many turns a run may take.** A cap is a safety property; the value is a policy
-   choice, and the peer protocol may want a different one than the local loop.
+All four were answered in [ADR 0006](./0006-core-decisions.md): the transcript is the
+durable record (D29), the provider request is a plain message list (D30), the core
+never reads a clock (D31), and the turn limit is a policy with its own value for the
+peer (D32). The questions still open are recorded there.

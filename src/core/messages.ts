@@ -9,6 +9,10 @@
  * and no cost table on a message, because the core must not know which vendor served
  * it — that is the adapter layer's business, and it is what lets the same message
  * travel over the peer link unchanged.
+ *
+ * **There is no timestamp.** The core does not read a clock (ADR 0006 D29), so it
+ * cannot stamp anything. Order is positional — the transcript is append-only, and
+ * position is the order. When the host needs times, it stamps them as it records.
  */
 
 export type TextContent = { readonly type: "text"; readonly text: string };
@@ -39,7 +43,6 @@ export interface Usage {
 export interface UserMessage {
 	readonly role: "user";
 	readonly content: string | readonly (TextContent | ImageContent)[];
-	readonly timestamp: number;
 }
 
 export interface AssistantMessage {
@@ -48,7 +51,6 @@ export interface AssistantMessage {
 	readonly usage: Usage;
 	readonly stopReason: StopReason;
 	readonly errorMessage?: string;
-	readonly timestamp: number;
 }
 
 export interface ToolResultMessage {
@@ -58,7 +60,6 @@ export interface ToolResultMessage {
 	readonly content: readonly (TextContent | ImageContent)[];
 	readonly isError: boolean;
 	readonly details?: unknown;
-	readonly timestamp: number;
 }
 
 export type Message = UserMessage | AssistantMessage | ToolResultMessage;
@@ -98,20 +99,19 @@ export function toolCall(
 	return { type: "toolCall", id, name, arguments: args };
 }
 
-export function userMessage(content: string, timestamp: number): UserMessage {
-	return { role: "user", content, timestamp };
+export function userMessage(content: string): UserMessage {
+	return { role: "user", content };
 }
 
 export function assistantMessage(
 	content: readonly ContentBlock[],
 	stopReason: StopReason,
-	timestamp: number,
 	usage: Usage = emptyUsage,
 	errorMessage?: string,
 ): AssistantMessage {
 	return errorMessage === undefined
-		? { role: "assistant", content, usage, stopReason, timestamp }
-		: { role: "assistant", content, usage, stopReason, errorMessage, timestamp };
+		? { role: "assistant", content, usage, stopReason }
+		: { role: "assistant", content, usage, stopReason, errorMessage };
 }
 
 export function toolResultMessage(
@@ -119,10 +119,9 @@ export function toolResultMessage(
 	toolName: string,
 	content: readonly (TextContent | ImageContent)[],
 	isError: boolean,
-	timestamp: number,
 	details?: unknown,
 ): ToolResultMessage {
 	return details === undefined
-		? { role: "toolResult", toolCallId, toolName, content, isError, timestamp }
-		: { role: "toolResult", toolCallId, toolName, content, isError, details, timestamp };
+		? { role: "toolResult", toolCallId, toolName, content, isError }
+		: { role: "toolResult", toolCallId, toolName, content, isError, details };
 }

@@ -53,6 +53,13 @@ intents, the driver performs them, and the laws are properties of that function.
 is a six-state machine, the transcript is append-only with a derived context, and the
 tool dispatch policy is ours rather than inherited.
 
+Four decisions of the design pass are settled in ADR 0006: the transcript is the durable
+record; the provider request is a plain message list the adapter lowers; the core never
+reads a clock; the turn limit is a policy with its own value for a delegated task.
+The third one had a consequence worth stating — the core cannot stamp time on its own
+messages, so messages carry no timestamp and the transcript is appended by intent, with
+the host doing the writing.
+
 Open, and recorded in the ADRs: whether the dialect ships as its own package; the
 coercion default; whether the reference implementation ships a TUI; the backend harness
 option; the exchange frames in detail.
