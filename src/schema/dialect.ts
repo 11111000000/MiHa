@@ -106,10 +106,17 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * The name of a value's type, as it is reported to a model.
+ *
+ * Numbers are reported as "number" whatever they are. Telling a model it sent an
+ * "integer" when it sent `7` is noise: in the dialect, `integer` is a refinement of
+ * `number`, not a different kind of thing. Where the distinction matters — an integer
+ * that is not one — the message carries the value instead.
+ */
 function typeName(value: unknown): string {
 	if (value === null) return "null";
 	if (Array.isArray(value)) return "array";
-	if (typeof value === "number") return Number.isInteger(value) ? "integer" : "number";
 	return typeof value;
 }
 

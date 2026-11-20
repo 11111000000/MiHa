@@ -21,11 +21,18 @@ export type ImageContent = { readonly type: "image"; readonly data: string; read
 
 export type ThinkingContent = { readonly type: "thinking"; readonly thinking: string };
 
+/**
+ * A tool call.
+ *
+ * `argumentsText` is the **raw text** the provider sent, kept verbatim. The parsed
+ * arguments are derived from it and never replace it, so the transcript stays
+ * lossless and an incomplete argument string is detectable (law M2).
+ */
 export type ToolCallBlock = {
 	readonly type: "toolCall";
 	readonly id: string;
 	readonly name: string;
-	readonly arguments: Readonly<Record<string, unknown>>;
+	readonly argumentsText: string;
 };
 
 export type ContentBlock = TextContent | ImageContent | ThinkingContent | ToolCallBlock;
@@ -91,12 +98,8 @@ export function thinking(thinking: string): ThinkingContent {
 	return { type: "thinking", thinking };
 }
 
-export function toolCall(
-	id: string,
-	name: string,
-	args: Readonly<Record<string, unknown>> = {},
-): ToolCallBlock {
-	return { type: "toolCall", id, name, arguments: args };
+export function toolCall(id: string, name: string, argumentsText: string): ToolCallBlock {
+	return { type: "toolCall", id, name, argumentsText };
 }
 
 export function userMessage(content: string): UserMessage {

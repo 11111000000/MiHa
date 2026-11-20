@@ -122,6 +122,31 @@ reported as one — in the trace, in the outcome, and over the peer link.
 - The turn limit being policy means it is not part of the core's correctness — it is a
   value the host passes in, and the core's only obligation is to honour it and say so.
 
+### D33. The raw argument text is the record; the parsed arguments are derived
+
+Implementing law M2 forced a choice about where a tool call's arguments live.
+
+| | Chosen | Rejected | Why chosen |
+|---|---|---|---|
+| Tool call arguments | **the raw text, verbatim** | a parsed object | an incomplete argument string has to be *detectable*, and it is only detectable if the raw text survives; and a parsed object cannot represent a fragment that does not parse |
+
+So `ToolCallBlock` carries `argumentsText: string` — exactly what the provider sent —
+and the parsed, validated arguments live only in the dispatch plan. Three consequences:
+
+- **The transcript is lossless.** A call whose arguments were malformed is recorded
+  exactly as it arrived, so the trace can show what the model actually sent.
+- **M2 needs no heuristic.** The call is rejected because its text does not parse or
+  does not validate — not because the provider said the message was truncated. The
+  core does not have to assume anything about how a provider repairs JSON.
+- **The adapter's job gets easier for OpenAI-shaped wire formats**, where the tool
+  arguments *are* a JSON string: the raw text passes straight through.
+
+A second decision follows from the same place: **when the host's permission hook
+rewrites the arguments, the replacement is re-validated.** Upstream deliberately trusts
+the hook and does not re-check it; we re-check, because the hook may only *narrow* a
+call, and a narrowing that breaks the tool's own schema is a defect we would rather
+catch before the tool runs than after.
+
 ## Alternatives considered
 
 | Alternative | Why not |

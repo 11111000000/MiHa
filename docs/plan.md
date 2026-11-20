@@ -45,14 +45,16 @@ step above it is green.
 Proven by: laws S1–S5 and C1–C3, 23 tests, and a bundle of **1 907 B gzip** against
 the 30 000 B ceiling.
 
-### 2. The tool contract and the dispatch plan
+### 2. The tool contract and the dispatch plan — **done**
 
 `src/core/tools.ts` — the four-field contract, the registry, validation by the core,
-the dispatch plan and its grouping.
+the dispatch plan and its grouping. `src/core/permissions.ts` — the hook the host
+fills. `src/core/json.ts` — parsing that cannot throw.
 
-Proven by: laws M1, M2, M3 and the policy T1, with the control cases the reference
-harnesses would have needed — an unknown tool, a validation failure, an incomplete
-argument string, a throwing tool, an exclusive tool beside a shared one.
+Proven by: laws M1, M2, M3 and the policy T1 — 19 tests covering an unknown tool, a
+validation failure with a path, a truncated argument string, a salvaged fragment that
+parses but does not validate, a throwing tool, a host that blocks a call, a host that
+narrows a call's arguments, and an exclusive tool beside a shared one.
 
 ### 3. The transcript and the projection
 

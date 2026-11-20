@@ -181,6 +181,31 @@
       "register": "fact",
       "control": "sed -i 's/} else if (schema.coerce \\&\\& typeof value === \"string\") {/} else if (typeof value === \"string\") {/' src/schema/dialect.ts",
       "waiver": null
+    },
+    {
+      "id": "tools-laws",
+      "text": "The dispatch planner satisfies laws M1, M2 and M3 and policy T1: every call of a batch appears exactly once across the plan and the rejections, a call whose arguments did not arrive complete is never planned for execution, a failed tool is a result carrying isError rather than ordinary content, and an exclusive tool runs alone while shared tools around it still share a group",
+      "scope": [
+        "src/core/tools.ts", "src/core/permissions.ts", "test/tools.test.ts"
+      ],
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0006-core-decisions.md",
+        "section": null,
+        "digest": "2f42a864bdbad94810fb6a8e28b18d120d1fd408ec853dbe7e31ef1969cee7e5",
+        "review": null
+      },
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        { "kind": "verifier", "spec": "bun test test/tools.test.ts" }
+      ],
+      "falsifier": "A call is planned and rejected at once or neither, a call with unparseable arguments reaches a group, a failure is reported as ordinary content, or an exclusive tool shares a group with another exclusive tool",
+      "register": "fact",
+      "control": "sed -i 's/if (tool.concurrency === \"exclusive\") {/if (false) {/' src/core/tools.ts",
+      "waiver": null
     }
   ]
 }

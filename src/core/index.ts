@@ -2,3 +2,6 @@ export * from "./exhaustive.ts";
 export * from "./messages.ts";
 export * from "./events.ts";
 export * from "./event-stream.ts";
+export * from "./json.ts";
+export * from "./permissions.ts";
+export * from "./tools.ts";

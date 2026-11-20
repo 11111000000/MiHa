@@ -157,6 +157,14 @@ export interface ToolDefinition {
   readonly execute: ToolExecute;
 }
 
+/** A call's arguments are the raw text the provider sent ([ADR 0006](./0006-core-decisions.md) D33). */
+export interface ToolCallBlock {
+  readonly type: "toolCall";
+  readonly id: string;
+  readonly name: string;
+  readonly argumentsText: string;
+}
+
 export type ToolExecute = (
   call: ToolCallBlock,
   signal: AbortSignal,
@@ -199,6 +207,10 @@ Upstream serialises the whole batch if any one tool is exclusive. We do not, bec
 "exclusive" means *must not interleave with another exclusive tool*, not *serialise the
 turn* — and the looser reading keeps the common case fast.
 
+The groups are built greedily in assistant order, so a maximal run of shared calls forms
+a group and an exclusive call interrupts it. The order of the calls is preserved by the
+groups, and a rejected call never breaks a group.
+
 **Our policy T4**: the transcript records tool results in **assistant order**, always.
 The live view follows completion order — those are two different channels, and only the
 first one has to replay. So the core buffers a batch's results and flushes them in
@@ -210,6 +222,8 @@ executed. We detect it by parsing the raw argument text **once**, strictly, at t
 moment the call is dispatched. A fragment that does not parse is not a call; it is
 answered with an error asking the model to re-issue. This is stricter than upstream's
 stop-reason heuristic and does not depend on how the provider repairs truncated JSON.
+The raw text is what the transcript keeps, so the detection needs no heuristic at all
+([ADR 0006](./0006-core-decisions.md) D33).
 
 **Law M1** is enforced in two places: the loop, and the transcript writer. Every path
 that appends a call also appends its result — unknown tool, validation failure, parse
