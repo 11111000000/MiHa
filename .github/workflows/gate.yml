@@ -1,0 +1,54 @@
+name: gate
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install the dependencies
+        run: npm ci --ignore-scripts
+
+      # The method's binary is not vendored here: it is built from its own sources,
+      # which is where it is maintained. This mirrors what the method's own
+      # repository does in its CI.
+      - uses: DeterminateSystems/nix-installer-action@v0
+        with:
+          extra-conf: |
+            accept-flake-config = true
+            experimental-features = nix-command flakes
+
+      - name: Build the method's binary
+        run: |
+          nix build github:11111000000/math-coding#default --no-link
+          mkdir -p "$HOME/.local/bin"
+          cp "$(nix path-info github:11111000000/math-coding#default)/bin/mathc" "$HOME/.local/bin/mathc"
+          "$HOME/.local/bin/mathc" --version
+
+      - name: The gate
+        run: sh scripts/gate.sh
+
+      - name: The method is set up
+        run: mathc doctor

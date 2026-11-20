@@ -25,6 +25,7 @@ APIs.
 | Path | What |
 |---|---|
 | `docs/plan.md` | **the route through the work**: what is built, in what order, how each piece is proved |
+| `docs/method.md` | **how this repository is developed**: the claim → code → proof → commit loop and the gate |
 | `docs/adr/0005-core-harness.md` | the core harness: the state machine, the tool contract, dispatch, the peer exchange |
 | `docs/adr/0004-quality-bar.md` | the quality bar and the budgets it is measured against |
 | `docs/adr/0003-core-scope.md` | how much of pi to take, and what "parity" means |
@@ -78,6 +79,14 @@ capability bridge; the exchange transport; credential scope on delegated work; n
 
 ## Working method
 
-Development follows **math-coding**: claims with explicit falsifiers, machine verifiers
-with negative controls, and an honest map of what is actually proven. The evidence trail
-lives in `.math/v5/`.
+Development follows **math-coding**: a claim with an explicit falsifier, a machine that
+checks it, and a control that proves the check can fail. The method is not next to the
+work — it *is* the work:
+
+- `bun run check` is the gate: the budget, the documents, the types, the tests and the
+  evidence. It is what the commit hook runs and what CI runs.
+- A slice starts by declaring its claims (`mathc add`), before the code.
+- `mathc next` says what to do next and why.
+
+How the loop works, what is claimed and what is only gated, and what the method costs
+here — in [docs/method.md](docs/method.md). The evidence trail lives in `.math/v5/`.

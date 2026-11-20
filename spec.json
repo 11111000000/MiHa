@@ -2,7 +2,13 @@
   "schema_version": 5,
   "goal": {
     "text": "MiHa is a reference-grade browser agent harness: its budget, its laws and its document graph are all machine-checked, and every claim below is proven with a negative control",
-    "scope": [ "docs/", "scripts/", "src/", "test/", "package.json" ],
+    "scope": [
+      "docs/",
+      "scripts/",
+      "src/",
+      "test/",
+      "package.json"
+    ],
     "by": "petr p.b.kosov@yandex.ru",
     "at": 1795174241,
     "reason": "The aim now covers the implementation and its budgets, not only the decision record"
@@ -11,7 +17,11 @@
     {
       "id": "docs-links-resolve",
       "text": "Every relative document link and every ADR supersedes target in the decision record resolves to a file that exists, and the supersedes chain terminates without looping",
-      "scope": [ "docs/", "scripts/check-docs.mjs", "README.md" ],
+      "scope": [
+        "docs/",
+        "scripts/check-docs.mjs",
+        "README.md"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
@@ -29,7 +39,10 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun scripts/check-docs.mjs links" }
+        {
+          "kind": "verifier",
+          "spec": "bun scripts/check-docs.mjs links"
+        }
       ],
       "falsifier": "A document links to a file that does not exist, or an ADR names a missing or looping supersedes target",
       "register": "fact",
@@ -39,7 +52,10 @@
     {
       "id": "decisions-well-formed",
       "text": "Every decision label referenced anywhere in the documentation is defined by an ADR heading, each ADR's labels are contiguous from D1, and no ADR defines decisions that nothing else references",
-      "scope": [ "docs/adr/", "scripts/check-docs.mjs" ],
+      "scope": [
+        "docs/adr/",
+        "scripts/check-docs.mjs"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
@@ -70,7 +86,10 @@
     {
       "id": "measurements-attributed",
       "text": "Every measurement stated in the research documents carries a source: either a file and line, a URL, or a caption directly above the table that declares where the numbers come from",
-      "scope": [ "docs/research/", "scripts/check-docs.mjs" ],
+      "scope": [
+        "docs/research/",
+        "scripts/check-docs.mjs"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
@@ -101,7 +120,11 @@
     {
       "id": "budgets-enforced",
       "text": "The published browser bundle, the per-layer code-line budgets, the runtime dependency count and the absence of any in the source all hold within the limits declared in ADR 0004",
-      "scope": [ "src/", "scripts/check-budget.mjs", "package.json" ],
+      "scope": [
+        "src/",
+        "scripts/check-budget.mjs",
+        "package.json"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
@@ -119,7 +142,10 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun scripts/check-budget.mjs" }
+        {
+          "kind": "verifier",
+          "spec": "bun scripts/check-budget.mjs"
+        }
       ],
       "falsifier": "The browser bundle exceeds 30 000 B gzip, a layer exceeds its line budget, a runtime dependency is declared, or any appears in src/",
       "register": "fact",
@@ -129,7 +155,10 @@
     {
       "id": "stream-laws",
       "text": "The event stream satisfies laws S1 to S5: events are delivered in push order exactly once, result resolves exactly once with the terminal value, events after the terminal are ignored, iteration ends after the terminal event, and no event is lost between a push and the start of iteration",
-      "scope": [ "src/core/event-stream.ts", "test/event-stream.test.ts" ],
+      "scope": [
+        "src/core/event-stream.ts",
+        "test/event-stream.test.ts"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
@@ -147,7 +176,10 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/event-stream.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/event-stream.test.ts"
+        }
       ],
       "falsifier": "A law is broken: order or count of delivered events changes, result resolves with the wrong value or more than once, a late event is delivered, or an event pushed before iteration is lost",
       "register": "fact",
@@ -157,7 +189,10 @@
     {
       "id": "dialect-laws",
       "text": "The tool-parameter dialect satisfies laws C1 to C3: every value the dialect admits is accepted, every value it does not admit is rejected with a JSON Pointer path, and coercion happens only where the dialect declares it",
-      "scope": [ "src/schema/dialect.ts", "test/dialect.test.ts" ],
+      "scope": [
+        "src/schema/dialect.ts",
+        "test/dialect.test.ts"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
@@ -175,7 +210,10 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/dialect.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/dialect.test.ts"
+        }
       ],
       "falsifier": "A value the dialect admits is rejected, a rejected value carries no path, or a value is coerced where the dialect did not ask for coercion",
       "register": "fact",
@@ -186,7 +224,9 @@
       "id": "tools-laws",
       "text": "The dispatch planner satisfies laws M1, M2 and M3 and policy T1: every call of a batch appears exactly once across the plan and the rejections, a call whose arguments did not arrive complete is never planned for execution, a failed tool is a result carrying isError rather than ordinary content, and an exclusive tool runs alone while shared tools around it still share a group",
       "scope": [
-        "src/core/tools.ts", "src/core/permissions.ts", "test/tools.test.ts"
+        "src/core/tools.ts",
+        "src/core/permissions.ts",
+        "test/tools.test.ts"
       ],
       "source": {
         "kind": "madr",
@@ -200,7 +240,10 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/tools.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/tools.test.ts"
+        }
       ],
       "falsifier": "A call is planned and rejected at once or neither, a call with unparseable arguments reaches a group, a failure is reported as ordinary content, or an exclusive tool shares a group with another exclusive tool",
       "register": "fact",
@@ -211,7 +254,9 @@
       "id": "run-laws",
       "text": "The state machine and the driver together keep laws M1, M2, M3, M4 and T4 over a whole run: every tool call of every batch receives exactly one result including on rejection, tool failure, provider error and cancellation; a call with arguments that did not arrive complete is never executed; a failed tool is a result carrying isError; a provider failure is an event rather than a throw; and the tool results are recorded in assistant order",
       "scope": [
-        "src/core/run.ts", "src/core/loop.ts", "src/core/transcript.ts",
+        "src/core/run.ts",
+        "src/core/loop.ts",
+        "src/core/transcript.ts",
         "test/e2e.test.ts"
       ],
       "source": {
@@ -226,11 +271,40 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/e2e.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/e2e.test.ts"
+        }
       ],
       "falsifier": "A call is left unanswered on any path, a call with unparseable arguments reaches a group, a failure becomes ordinary content or a thrown error, or the results are recorded in completion order",
       "register": "fact",
       "control": "sed -i 's/const flushed = flushResults({ ...state, results }, outputs);/const flushed = { ...state, phase: \"settling\" as const, results: [] };/' src/core/run.ts",
+      "waiver": null
+    },
+    {
+      "id": "gate-checks-pass",
+      "text": "The commit gate runs every check that needs only bun — the budget, the documents and the tests — and all of them pass",
+      "scope": [
+        "scripts/checks.sh",
+        "scripts/gate.sh",
+        "scripts/types.sh",
+        "src/",
+        "test/"
+      ],
+      "source": null,
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        {
+          "kind": "verifier",
+          "spec": "sh scripts/checks.sh"
+        }
+      ],
+      "falsifier": "One of the checks is not run by the gate, or one of them fails. The type check is deliberately not claimed: the isolated evidence copy is a git clone with no node_modules, so a control there would fail for a reason unrelated to its subject, and the method counts an infrastructure failure as no refutation at all",
+      "register": "fact",
+      "control": "sed -i 's/expect(seen).toEqual(\\[\\\"a\\\", \\\"b\\\", \\\"z\\\"\\]);/expect(seen).toEqual([\\\"WRONG\\\"]);/' test/event-stream.test.ts",
       "waiver": null
     }
   ]

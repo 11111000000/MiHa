@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+# The commit gate.
+#
+# `git commit` runs this. It refuses the commit when the evidence is not green, because
+# a commit that cannot be reproduced is not a record of anything.
+
+set -e
+
+root="$(git rev-parse --show-toplevel)"
+
+if ! sh "$root/scripts/gate.sh"; then
+	echo ""
+	echo "commit refused: the gate is not green."
+	echo "Fix the subject, or change the claim and say out loud what changed and why."
+	exit 1
+fi

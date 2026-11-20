@@ -22,7 +22,12 @@
     "typecheck": "tsc --noEmit",
     "check:budget": "bun scripts/check-budget.mjs",
     "check:docs": "bun scripts/check-docs.mjs links && bun scripts/check-docs.mjs decisions && bun scripts/check-docs.mjs attribution",
-    "check": "bun run check:budget && bun run check:docs && bun test"
+    "check:checks": "sh scripts/checks.sh",
+    "check:types": "sh scripts/types.sh",
+    "check:evidence": "mathc run",
+    "check": "sh scripts/gate.sh",
+    "gate": "sh scripts/gate.sh",
+    "measure": "mathc-stand"
   },
   "devDependencies": {
     "@types/bun": "^1.4.5",
