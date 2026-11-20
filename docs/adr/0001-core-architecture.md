@@ -1,6 +1,6 @@
 # ADR 0001: MiHa core architecture
 
-- **Status:** **Superseded by [ADR 0002](./0002-scenario-runtime.md)** — kept as the decision trail
+- **Status:** **Superseded by [ADR 0002](./0002-core-harness.md)** — kept as the decision trail
 - **Date:** 2026-11-20
 - **Owner:** petr p.b.kosov@yandex.ru
 - **Supersedes:** —
@@ -10,7 +10,7 @@
 > library that a frontend application embeds, it is a **runtime for programs written by
 > an agent**, with an inner agent, runtime interface synthesis, delegation, and a
 > stability harness. This ADR's agent core survives as one component of
-> [ADR 0002](./0002-scenario-runtime.md) (decision D6).
+> [ADR 0002](./0002-core-harness.md) (decision D6).
 >
 > Two concrete defects were also found in this ADR after it was written; both are
 > recorded in [Critique from research cycle 2](#critique-from-research-cycle-2) below.

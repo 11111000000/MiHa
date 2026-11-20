@@ -14,10 +14,15 @@
       "scope": [ "docs/", "scripts/check-docs.mjs", "README.md" ],
       "source": {
         "kind": "madr",
-        "path": "docs/adr/0002-scenario-runtime.md",
+        "path": "docs/adr/0002-core-harness.md",
         "section": null,
-        "digest": "091efc0a0afb51ffd1924799bf7ad31776c4486cb825029d1fdcf0d59f3c8b07",
-        "review": null
+        "digest": "b5d68ac224519d92d48a471a1db966080ad12b17561624aa069a2c551cbaf359",
+        "review": {
+          "by": "petr p.b.kosov@yandex.ru",
+          "reason": "Owner retracted the scenario-runtime framing and restated the decision as a frontend-first agent harness with a symmetric backend peer; ADR 0002 was rewritten and renamed, the document set was revised to match, and the claims were re-checked against it",
+          "at": 1795156054,
+          "previous_digest": "091efc0a0afb51ffd1924799bf7ad31776c4486cb825029d1fdcf0d59f3c8b07"
+        }
       },
       "kind": "acceptance",
       "phase": "pre-merge",
@@ -37,10 +42,15 @@
       "scope": [ "docs/adr/", "scripts/check-docs.mjs" ],
       "source": {
         "kind": "madr",
-        "path": "docs/adr/0002-scenario-runtime.md",
+        "path": "docs/adr/0002-core-harness.md",
         "section": null,
-        "digest": "091efc0a0afb51ffd1924799bf7ad31776c4486cb825029d1fdcf0d59f3c8b07",
-        "review": null
+        "digest": "b5d68ac224519d92d48a471a1db966080ad12b17561624aa069a2c551cbaf359",
+        "review": {
+          "by": "petr p.b.kosov@yandex.ru",
+          "reason": "Owner retracted the scenario-runtime framing and restated the decision as a frontend-first agent harness with a symmetric backend peer; ADR 0002 was rewritten and renamed, the document set was revised to match, and the claims were re-checked against it",
+          "at": 1795156054,
+          "previous_digest": "091efc0a0afb51ffd1924799bf7ad31776c4486cb825029d1fdcf0d59f3c8b07"
+        }
       },
       "kind": "acceptance",
       "phase": "pre-merge",
@@ -54,7 +64,7 @@
       ],
       "falsifier": "A referenced decision label has no definition, an ADR skips or repeats a label, or an ADR contains decisions that nothing else references",
       "register": "fact",
-      "control": "printf '\\nSee D99 for the details.\\n' >> docs/adr/0002-scenario-runtime.md",
+      "control": "printf '\\nSee D99 for the details.\\n' >> docs/adr/0002-core-harness.md",
       "waiver": null
     },
     {
@@ -63,10 +73,15 @@
       "scope": [ "docs/research/", "scripts/check-docs.mjs" ],
       "source": {
         "kind": "madr",
-        "path": "docs/adr/0002-scenario-runtime.md",
+        "path": "docs/adr/0002-core-harness.md",
         "section": null,
-        "digest": "091efc0a0afb51ffd1924799bf7ad31776c4486cb825029d1fdcf0d59f3c8b07",
-        "review": null
+        "digest": "b5d68ac224519d92d48a471a1db966080ad12b17561624aa069a2c551cbaf359",
+        "review": {
+          "by": "petr p.b.kosov@yandex.ru",
+          "reason": "Owner retracted the scenario-runtime framing and restated the decision as a frontend-first agent harness with a symmetric backend peer; ADR 0002 was rewritten and renamed, the document set was revised to match, and the claims were re-checked against it",
+          "at": 1795156054,
+          "previous_digest": "091efc0a0afb51ffd1924799bf7ad31776c4486cb825029d1fdcf0d59f3c8b07"
+        }
       },
       "kind": "acceptance",
       "phase": "pre-merge",

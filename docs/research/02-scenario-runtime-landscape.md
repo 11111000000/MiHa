@@ -2,10 +2,20 @@
 
 Date: 2026-11-20. Companion to [01-reference-landscape.md](./01-reference-landscape.md).
 
-The concept changed between the two cycles. Cycle 1 asked "how do we build a small
-browser-embeddable agent core". Cycle 2 asks three questions that follow from the new
-concept — MiHa is a **runtime for agent-written scenario programs**, with an inner agent,
-runtime UI synthesis, delegation, and a stability harness:
+> **Note on framing.** This cycle was commissioned under a mistaken reading of the
+> brief — that MiHa would be a runtime for programs written by an agent, with an
+> evaluation harness as a product component. It is not: "we develop agents with an
+> agent" is the **development style** for the applications we build, not part of
+> MiHa's runtime. The measurements below stand and are load-bearing for
+> [ADR 0002](../adr/0002-core-harness.md) — in particular the Worker findings, the
+> WASM findings, and the fact that a Worker is not a security boundary. The
+> runtime-interface-generation and evaluation sections are retained because they still
+> bound what the **host** can reasonably build on top of MiHa, and because the trace
+> and record/replay mechanisms they identify are adopted as runtime features (ADR D11).
+
+Cycle 1 asked "how do we build a small browser-embeddable agent core". Cycle 2 asks
+three questions that follow from MiHa being a frontend-first agent harness with a
+symmetric backend peer:
 
 1. What substrate should agent-written code run on in the browser?
 2. How can an agent generate an interface at runtime, safely and fast?
@@ -294,11 +304,13 @@ Source: research cycle 2; sizes cited from `packages/schema/README.md:1-12`.
 
 | Earlier decision | Verdict after cycle 2 |
 |---|---|
-| MiHa is a library embedded in a frontend app | **Superseded.** MiHa is a runtime for agent-written scenarios, with an evaluation plane. |
+| MiHa is a library embedded in a frontend app | **Correct reading**, but ADR 0001's version of it was wrong in its specifics: the citations pointed at the wrong repository, the schema validator was hand-rolled, and it shipped three adapters and a storage implementation it should not have. |
 | Browser-safety enforced by a static regex scan | **Weak.** Replace with bundler metafile assertions + per-entry file-count budgets + a runtime-dependency audit via the TS compiler API. A regex is a lint, not a proof. |
 | Hand-rolled JSON Schema subset validator | **Rejected.** `@earendil-works/pi-schema` is a full draft-2020-12 validator, 0 deps, 8.5 KB min+gzip, 2222/2223 of the official test suite. A subset validator rejects valid schemas and will not coerce `"42"` → `42`. |
 | Three provider adapters shipped | **Rejected.** Ship the seam, ship the reusable author primitives (SSE splitter, tool-call tracker, partial-JSON parser), ship at most one optional OpenAI-compatible adapter. |
 | IndexedDB store shipped inside the core | **Rejected.** It is a host concern. Reuse Genium's existing offline queue instead. |
 | `EventStream.fail()` | **Rejected.** Upstream has none; errors are events. Two error channels is worse than one. |
 | Session branching, MCP, delegation all in v1 | **Rejected for MCP and session branching.** Delegation stays — it is in the brief — but as a thin capability, with remote-calls-back deferred. |
-| Nothing about evaluation | **The biggest gap.** The evaluation plane is a first-class component, not a test script. |
+| Nothing about evaluation | **Partly right, partly retracted.** The evaluation harness is not MiHa's product — it is the development process around MiHa. But the two mechanisms that make such a harness meaningful — a structured **trace** and **record/replay** in front of the provider — are runtime features MiHa must ship, and they are absent from ADR 0001. |
+| No worker placement decision | **Added.** The core runs in a Web Worker by default; the main thread is the host for DOM, storage and browser APIs. A Worker is a scheduling boundary, not a security boundary (measured). |
+| No answer on WASM | **Added.** QuickJS-in-WASM is 4×–19× slower than V8 and carries a 16 MiB linear-memory floor that never shrinks, so it is not the execution tier. WASM stays a candidate for measured hot spots only. |
