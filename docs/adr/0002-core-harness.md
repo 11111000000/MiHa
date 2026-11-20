@@ -1,6 +1,6 @@
 # ADR 0002: MiHa core — a minimal browser-first agent harness with a symmetric peer
 
-- **Status:** Proposed
+- **Status:** Proposed — D2 and D7 amended by [ADR 0003](./0003-core-scope.md); the rest stands
 - **Date:** 2026-11-20
 - **Owner:** petr p.b.kosov@yandex.ru
 - **Supersedes:** [ADR 0001](./0001-core-architecture.md)
@@ -97,11 +97,13 @@ later needs an independent release cadence can be extracted without moving the l
 **Zero runtime dependencies** for the core and the protocol. The one library we take is
 the JSON Schema validator from upstream pi, which itself has zero dependencies.
 
-### D2. The agent core is a pinned, trimmed port of upstream pi-agent-core
+### D2. The agent core is re-derived from upstream's specification, not ported
 
-Upstream `packages/agent` is 2 548 lines across six files and is browser-safe as
-published. We port the three files that matter — the loop, the facade, the types — and
-pin the revision. We do not take the fork's extra 13 000 lines, and we do not reinvent.
+> Replaced by [ADR 0003](./0003-core-scope.md) D15 and D16. The short form: the core is
+> written for MiHa's job, at a budget of **≈ 765–995 code LOC** against upstream's
+> 1 437 for the same territory. Upstream is the **specification**, and upstream's
+> **browser-safe test suite (4 238 lines)** is the part that transfers — ported first,
+> red against a stub, then implemented until green.
 
 Kept from upstream, with upstream's names, so a host written against pi keeps working:
 
@@ -113,12 +115,16 @@ Kept from upstream, with upstream's names, so a host written against pi keeps wo
   `tool_execution_update`, `tool_execution_end`.
 - `AgentContext.tools` as a **plain array** — the array *is* the registry. There is no
   registry object.
-- The provider-facing `AssistantMessageEvent` union, including the `text_start`/`text_end`
-  and `thinking_start`/`thinking_end` lifecycle events, not only the deltas.
+- The entry points pi's higher layers use: `Agent`, `agentLoop`, `runToolCall`,
+  `setDefaultStreamFn`.
 
 Dropped: telemetry, in-band tool dialects, provider-native compaction, the session
 manager, the permission engine, the fork's `fail()` on the event stream, and the
 fork's `interruptible`/`deferrable`/`loadMode` tool flags.
+
+MiHa's own type surface replaces upstream's: a plain JSON Schema on a tool rather than a
+schema-library-derived generic, and a thin provider event without a whole-message
+snapshot on every variant.
 
 ### D3. The event stream has no `fail()`
 
@@ -204,6 +210,16 @@ MiHa ships the reusable pieces a provider author needs, not the adapters:
 | a tool-call correlation tracker | 120 | the AI SDK needed 534 lines for this; the problem is provider-independent |
 | a partial-JSON parser | 80 | streaming tool arguments render correctly; upstream needed a dependency for it |
 
+> Amended by [ADR 0003](./0003-core-scope.md) D18: the JSON Schema **validator** is taken
+> from upstream whole (`@earendil-works/pi-schema`, zero runtime dependencies,
+> browser-safe) and is MiHa's only upstream dependency — used for validation only, so
+> that a tool's `parameters` stays a plain JSON Schema and the schema library's
+> `Static<T>` does not infect call sites. The **argument-streaming** layer is the
+> opposite decision: in v1 MiHa keeps raw argument text and parses it once at
+> `toolcall_end` (40–70 LOC), which forfeits live partial-argument rendering but makes
+> the truncated-call rule of D5 trivially safe. Vendoring upstream's 559-line
+> incremental parser is a v1.1 option.
+
 Plus **one** optional adapter, `miha/provider/openai-compat`, about 300 lines and
 fetch-only with no SDK. OpenAI-compatible Chat Completions is the lingua franca and an
 application needs a working default. There is no separate Anthropic adapter and no
@@ -211,6 +227,9 @@ separate proxy adapter: a first-party relay should speak the OpenAI-compatible d
 which makes the relay a base-URL change rather than a second adapter.
 
 ### D8. In the browser, MiHa runs in a Worker; the main thread is the host
+
+(The full harness for a backend deployment, and what "parity" means across the two
+sides, are decided in [ADR 0003](./0003-core-scope.md) D17.)
 
 The core is environment-agnostic and runs anywhere. In a browser application the
 default placement is a **dedicated Web Worker**, so a slow turn never freezes the

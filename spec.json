@@ -1,11 +1,11 @@
 {
   "schema_version": 5,
   "goal": {
-    "text": "The stage-1 deliverable of MiHa is the architectural decision record, and every statement in it stands up: the document graph resolves, every decision is defined and referenced, and every number carries a source",
-    "scope": [ "docs/", "scripts/", "README.md" ],
+    "text": "MiHa is a reference-grade browser agent harness: its budget, its laws and its document graph are all machine-checked, and every claim below is proven with a negative control",
+    "scope": [ "docs/", "scripts/", "src/", "test/", "package.json" ],
     "by": "petr p.b.kosov@yandex.ru",
-    "at": 1795139094,
-    "reason": null
+    "at": 1795174241,
+    "reason": "The aim now covers the implementation and its budgets, not only the decision record"
   },
   "claims": [
     {
@@ -16,12 +16,12 @@
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
         "section": null,
-        "digest": "b5d68ac224519d92d48a471a1db966080ad12b17561624aa069a2c551cbaf359",
+        "digest": "84ce31dc692f952214195ba5a7b966b1af367741a0f91339fcbbd3ae39f27e42",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner retracted the scenario-runtime framing and restated the decision as a frontend-first agent harness with a symmetric backend peer; ADR 0002 was rewritten and renamed, the document set was revised to match, and the claims were re-checked against it",
-          "at": 1795156054,
-          "previous_digest": "091efc0a0afb51ffd1924799bf7ad31776c4486cb825029d1fdcf0d59f3c8b07"
+          "reason": "Owner reviewed the decision and directed its amendment: D2 replaced by a re-derivation from upstream's specification, D7 amended, and the aim widened to cover the implementation and its budgets",
+          "at": 1795174267,
+          "previous_digest": "b5d68ac224519d92d48a471a1db966080ad12b17561624aa069a2c551cbaf359"
         }
       },
       "kind": "acceptance",
@@ -44,12 +44,12 @@
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
         "section": null,
-        "digest": "b5d68ac224519d92d48a471a1db966080ad12b17561624aa069a2c551cbaf359",
+        "digest": "84ce31dc692f952214195ba5a7b966b1af367741a0f91339fcbbd3ae39f27e42",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner retracted the scenario-runtime framing and restated the decision as a frontend-first agent harness with a symmetric backend peer; ADR 0002 was rewritten and renamed, the document set was revised to match, and the claims were re-checked against it",
-          "at": 1795156054,
-          "previous_digest": "091efc0a0afb51ffd1924799bf7ad31776c4486cb825029d1fdcf0d59f3c8b07"
+          "reason": "Owner reviewed the decision and directed its amendment: D2 replaced by a re-derivation from upstream's specification, D7 amended, and the aim widened to cover the implementation and its budgets",
+          "at": 1795174267,
+          "previous_digest": "b5d68ac224519d92d48a471a1db966080ad12b17561624aa069a2c551cbaf359"
         }
       },
       "kind": "acceptance",
@@ -75,12 +75,12 @@
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
         "section": null,
-        "digest": "b5d68ac224519d92d48a471a1db966080ad12b17561624aa069a2c551cbaf359",
+        "digest": "84ce31dc692f952214195ba5a7b966b1af367741a0f91339fcbbd3ae39f27e42",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner retracted the scenario-runtime framing and restated the decision as a frontend-first agent harness with a symmetric backend peer; ADR 0002 was rewritten and renamed, the document set was revised to match, and the claims were re-checked against it",
-          "at": 1795156054,
-          "previous_digest": "091efc0a0afb51ffd1924799bf7ad31776c4486cb825029d1fdcf0d59f3c8b07"
+          "reason": "Owner reviewed the decision and directed its amendment: D2 replaced by a re-derivation from upstream's specification, D7 amended, and the aim widened to cover the implementation and its budgets",
+          "at": 1795174267,
+          "previous_digest": "b5d68ac224519d92d48a471a1db966080ad12b17561624aa069a2c551cbaf359"
         }
       },
       "kind": "acceptance",
@@ -96,6 +96,75 @@
       "falsifier": "A table row states a measurement with no source in the row and no source caption above its table",
       "register": "fact",
       "control": "sed -i '/^Source: measured on this machine against/,+3d' docs/research/02-scenario-runtime-landscape.md",
+      "waiver": null
+    },
+    {
+      "id": "budgets-enforced",
+      "text": "The published browser bundle, the per-layer code-line budgets, the runtime dependency count and the absence of any in the source all hold within the limits declared in ADR 0004",
+      "scope": [ "src/", "scripts/check-budget.mjs", "package.json" ],
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0004-quality-bar.md",
+        "section": null,
+        "digest": "5a37836c72a21b8a8aff4b9839d83a61791a2fc726205c62ab7ca1b7a9d1bc32",
+        "review": null
+      },
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        { "kind": "verifier", "spec": "bun scripts/check-budget.mjs" }
+      ],
+      "falsifier": "The browser bundle exceeds 30 000 B gzip, a layer exceeds its line budget, a runtime dependency is declared, or any appears in src/",
+      "register": "fact",
+      "control": "printf '\\nexport const broken: any = 1;\\n' >> src/core/messages.ts",
+      "waiver": null
+    },
+    {
+      "id": "stream-laws",
+      "text": "The event stream satisfies laws S1 to S5: events are delivered in push order exactly once, result resolves exactly once with the terminal value, events after the terminal are ignored, iteration ends after the terminal event, and no event is lost between a push and the start of iteration",
+      "scope": [ "src/core/event-stream.ts", "test/event-stream.test.ts" ],
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0004-quality-bar.md",
+        "section": null,
+        "digest": "5a37836c72a21b8a8aff4b9839d83a61791a2fc726205c62ab7ca1b7a9d1bc32",
+        "review": null
+      },
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        { "kind": "verifier", "spec": "bun test test/event-stream.test.ts" }
+      ],
+      "falsifier": "A law is broken: order or count of delivered events changes, result resolves with the wrong value or more than once, a late event is delivered, or an event pushed before iteration is lost",
+      "register": "fact",
+      "control": "sed -i 's/this.#buffer.shift() as T/this.#buffer.pop() as T/' src/core/event-stream.ts",
+      "waiver": null
+    },
+    {
+      "id": "dialect-laws",
+      "text": "The tool-parameter dialect satisfies laws C1 to C3: every value the dialect admits is accepted, every value it does not admit is rejected with a JSON Pointer path, and coercion happens only where the dialect declares it",
+      "scope": [ "src/schema/dialect.ts", "test/dialect.test.ts" ],
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0004-quality-bar.md",
+        "section": null,
+        "digest": "5a37836c72a21b8a8aff4b9839d83a61791a2fc726205c62ab7ca1b7a9d1bc32",
+        "review": null
+      },
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        { "kind": "verifier", "spec": "bun test test/dialect.test.ts" }
+      ],
+      "falsifier": "A value the dialect admits is rejected, a rejected value carries no path, or a value is coerced where the dialect did not ask for coercion",
+      "register": "fact",
+      "control": "sed -i 's/} else if (schema.coerce \\&\\& typeof value === \"string\") {/} else if (typeof value === \"string\") {/' src/schema/dialect.ts",
       "waiver": null
     }
   ]

@@ -1,7 +1,7 @@
 {
   "name": "miha",
   "version": "0.0.0",
-  "description": "A runtime for programs written by an agent: scenario execution, inner agent, runtime UI synthesis, delegation and a stability harness",
+  "description": "A browser-first agent harness with a symmetric peer, written for embedding into any application",
   "license": "MIT",
   "type": "module",
   "sideEffects": false,
@@ -9,7 +9,23 @@
   "engines": {
     "node": ">=20"
   },
-  "workspaces": [
-    "packages/*"
-  ]
+  "exports": {
+    ".": "./src/index.ts",
+    "./core": "./src/core/index.ts",
+    "./schema": "./src/schema/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "check:budget": "bun scripts/check-budget.mjs",
+    "check:docs": "bun scripts/check-docs.mjs links && bun scripts/check-docs.mjs decisions && bun scripts/check-docs.mjs attribution",
+    "check": "bun run check:budget && bun run check:docs && bun test"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
 }

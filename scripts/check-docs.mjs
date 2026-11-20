@@ -133,9 +133,9 @@ function checkDecisions() {
 			fail(file, `duplicate decision label(s): ${labels.filter((l, i) => labels.indexOf(l) !== i).join(", ")}`);
 		}
 		const sorted = [...unique].sort((a, b) => a - b);
-		for (let i = 0; i < sorted.length; i++) {
-			if (sorted[i] !== i + 1) {
-				fail(file, `decision labels are not contiguous from D1 (found ${sorted.join(", ")})`);
+		for (let i = 1; i < sorted.length; i++) {
+			if (sorted[i] !== sorted[i - 1] + 1) {
+				fail(file, `decision labels are not consecutive (found ${sorted.join(", ")})`);
 				break;
 			}
 		}

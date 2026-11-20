@@ -1,0 +1,128 @@
+/**
+ * The message algebra.
+ *
+ * Every type here is a discriminated union or a readonly record. Nothing in this
+ * module is mutated after it is published, and nothing is partially defined: a value
+ * either has every field the type promises, or it does not exist.
+ *
+ * The vocabulary is deliberately provider-neutral. There is no `api`, no `provider`
+ * and no cost table on a message, because the core must not know which vendor served
+ * it — that is the adapter layer's business, and it is what lets the same message
+ * travel over the peer link unchanged.
+ */
+
+export type TextContent = { readonly type: "text"; readonly text: string };
+
+export type ImageContent = { readonly type: "image"; readonly data: string; readonly mimeType: string };
+
+export type ThinkingContent = { readonly type: "thinking"; readonly thinking: string };
+
+export type ToolCallBlock = {
+	readonly type: "toolCall";
+	readonly id: string;
+	readonly name: string;
+	readonly arguments: Readonly<Record<string, unknown>>;
+};
+
+export type ContentBlock = TextContent | ImageContent | ThinkingContent | ToolCallBlock;
+
+export type StopReason = "stop" | "length" | "toolUse" | "error" | "aborted";
+
+export interface Usage {
+	readonly input: number;
+	readonly output: number;
+	readonly cacheRead: number;
+	readonly cacheWrite: number;
+	readonly reasoning: number;
+}
+
+export interface UserMessage {
+	readonly role: "user";
+	readonly content: string | readonly (TextContent | ImageContent)[];
+	readonly timestamp: number;
+}
+
+export interface AssistantMessage {
+	readonly role: "assistant";
+	readonly content: readonly ContentBlock[];
+	readonly usage: Usage;
+	readonly stopReason: StopReason;
+	readonly errorMessage?: string;
+	readonly timestamp: number;
+}
+
+export interface ToolResultMessage {
+	readonly role: "toolResult";
+	readonly toolCallId: string;
+	readonly toolName: string;
+	readonly content: readonly (TextContent | ImageContent)[];
+	readonly isError: boolean;
+	readonly details?: unknown;
+	readonly timestamp: number;
+}
+
+export type Message = UserMessage | AssistantMessage | ToolResultMessage;
+
+/** What a tool returns. `isError` is a value, not an exception (law M3). */
+export interface ToolResult {
+	readonly content: readonly (TextContent | ImageContent)[];
+	readonly details?: unknown;
+	readonly isError?: boolean;
+}
+
+export const emptyUsage: Usage = Object.freeze({
+	input: 0,
+	output: 0,
+	cacheRead: 0,
+	cacheWrite: 0,
+	reasoning: 0,
+});
+
+export function text(text: string): TextContent {
+	return { type: "text", text };
+}
+
+export function image(data: string, mimeType: string): ImageContent {
+	return { type: "image", data, mimeType };
+}
+
+export function thinking(thinking: string): ThinkingContent {
+	return { type: "thinking", thinking };
+}
+
+export function toolCall(
+	id: string,
+	name: string,
+	args: Readonly<Record<string, unknown>> = {},
+): ToolCallBlock {
+	return { type: "toolCall", id, name, arguments: args };
+}
+
+export function userMessage(content: string, timestamp: number): UserMessage {
+	return { role: "user", content, timestamp };
+}
+
+export function assistantMessage(
+	content: readonly ContentBlock[],
+	stopReason: StopReason,
+	timestamp: number,
+	usage: Usage = emptyUsage,
+	errorMessage?: string,
+): AssistantMessage {
+	return errorMessage === undefined
+		? { role: "assistant", content, usage, stopReason, timestamp }
+		: { role: "assistant", content, usage, stopReason, errorMessage, timestamp };
+}
+
+export function toolResultMessage(
+	toolCallId: string,
+	toolName: string,
+	content: readonly (TextContent | ImageContent)[],
+	isError: boolean,
+	timestamp: number,
+	details?: unknown,
+): ToolResultMessage {
+	return details === undefined
+		? { role: "toolResult", toolCallId, toolName, content, isError, timestamp }
+		: { role: "toolResult", toolCallId, toolName, content, isError, details, timestamp };
+}

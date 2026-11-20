@@ -24,15 +24,31 @@ APIs.
 
 | Path | What |
 |---|---|
-| `docs/adr/0002-core-harness.md` | **the current decision** |
+| `docs/adr/0004-quality-bar.md` | the quality bar and the budgets it is measured against |
+| `docs/adr/0003-core-scope.md` | how much of pi to take, and what "parity" means |
+| `docs/adr/0002-core-harness.md` | the architecture |
 | `docs/adr/0001-core-architecture.md` | superseded; kept as the decision trail, with its own critique |
 | `docs/research/01-reference-landscape.md` | the reference harnesses, read and measured |
 | `docs/research/02-scenario-runtime-landscape.md` | browser isolation, WASM, runtime interface generation, stochastic evaluation |
+| `docs/research/03-pi-core-teardown.md` | pi's core taken apart, and the reachability of parity |
 
 ## Status
 
-Stage one: research and architecture. No implementation yet — code written against the
-earlier, misframed concept was removed rather than adapted.
+Research and architecture are done; the first implementation slice is in place.
+
+Decided: TypeScript, browser-first; **our own core**, written for the job, with
+upstream pi's browser-safe test suite as the conformance specification rather than as a
+dependency or a fork; one package, zero runtime dependencies; the browser bundle must
+fit **30 KB gzip**; in the browser the core runs in a Worker with the main thread as
+host for DOM and storage; the frontend and backend agents exchange tasks over one
+symmetric protocol that carries peer-initiated tool calls.
+
+In place now: the message and event algebras, the event stream with its five laws, and
+our own tool-parameter schema dialect — 1 907 B gzip so far, against a 30 000 B ceiling.
+
+Open, and recorded in the ADRs: whether the dialect ships as its own package; the
+coercion default; whether the reference implementation ships a TUI; the backend harness
+option; the exchange frames in detail.
 
 Decided: TypeScript, browser-first; one package with enforced internal layers; the agent
 core is a pinned, trimmed port of upstream `pi-agent-core` (2 548 LOC, browser-safe as
