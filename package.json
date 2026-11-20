@@ -1,0 +1,15 @@
+{
+  "name": "miha",
+  "version": "0.0.0",
+  "description": "A runtime for programs written by an agent: scenario execution, inner agent, runtime UI synthesis, delegation and a stability harness",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*"
+  ]
+}
