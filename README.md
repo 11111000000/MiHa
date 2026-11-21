@@ -45,6 +45,7 @@ The full comparison, with what it costs us, is in
 | `docs/plan.md` | **the route through the work**: what is built, in what order, how each piece is proved |
 | `docs/method.md` | **how this repository is developed**: the claim → code → proof → commit loop and the gate |
 | `docs/adr/0005-core-harness.md` | the core harness: the state machine, the tool contract, dispatch, the peer exchange |
+| `docs/adr/0006-alternatives.md` | the alternatives, and what we take from them |
 | `docs/adr/0004-quality-bar.md` | the quality bar and the budgets it is measured against |
 | `docs/adr/0003-core-scope.md` | how much of pi to take, and what "parity" means |
 | `docs/adr/0002-core-harness.md` | the architecture |
@@ -53,6 +54,7 @@ The full comparison, with what it costs us, is in
 | `docs/research/02-scenario-runtime-landscape.md` | browser isolation, WASM, runtime interface generation, stochastic evaluation |
 | `docs/research/03-pi-core-teardown.md` | pi's core taken apart, and the reachability of parity |
 | `docs/research/04-build-vs-use.md` | our core against pi's: the measured comparison, the pros and the cons |
+| `docs/research/05-alternative-architectures.md` | the alternative architectures, and what the evidence says about ours |
 
 ## Status
 

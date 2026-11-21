@@ -186,6 +186,9 @@ Three rules the contract carries:
 - **A tool that fails is a result.** The tool may throw; the core converts the throw
   into a result with `isError`. A tool may also return `isError` directly, and in that
   case `details` is kept for the interface, which a throw discards.
+- **A result has a byte budget.** The core truncates it and says so, keeping the
+  beginning and the end ([ADR 0006](./0006-alternatives.md) D34). The measured cost of
+  an unbounded result is quadratic; the schemas are constant and amortise.
 
 **The host does not run the tools. The driver does.** The host owns the tool's
 *policy* — the permission hook, which the dispatch has already applied — and the
@@ -279,6 +282,10 @@ Two rules:
   permission hook applies to it. A peer must not be able to bypass a local rule.
 - **A delegated task's events are ordinary events.** The receiving side renders a
   delegated task exactly as it renders its own.
+
+And one the evidence forced on us: the offer carries the delegator's **tool
+descriptions**, so the peer acts on what the delegator actually exposes rather than on
+a list of bare names ([ADR 0006](./0006-alternatives.md) D36).
 
 ### D31. The interface layer is optional and outside the core
 

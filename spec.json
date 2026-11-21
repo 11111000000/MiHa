@@ -262,12 +262,12 @@
         "kind": "madr",
         "path": "docs/adr/0005-core-harness.md",
         "section": null,
-        "digest": "b754f3deb3120b3f658a7f3805d55b30b1140550c81f6174d8918deace4a8316",
+        "digest": "14f240677da993200900317d593525123473cf263075089654f63b7ae106de6f",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner re-read the decision: the tool contract now passes the validated arguments, and the host runs the tools rather than the application. No decision changed",
-          "at": 1795266533,
-          "previous_digest": "da2188c69d081bfeafe17cc21259c07213c18200608e42e45e20a4f1efa1a657"
+          "reason": "Owner re-read the decision: the tool contract gained a result budget and the peer offer carries the delegator's tool descriptions. No decision changed",
+          "at": 1795271685,
+          "previous_digest": "b754f3deb3120b3f658a7f3805d55b30b1140550c81f6174d8918deace4a8316"
         }
       },
       "kind": "acceptance",
@@ -290,12 +290,12 @@
         "kind": "madr",
         "path": "docs/adr/0005-core-harness.md",
         "section": null,
-        "digest": "b754f3deb3120b3f658a7f3805d55b30b1140550c81f6174d8918deace4a8316",
+        "digest": "14f240677da993200900317d593525123473cf263075089654f63b7ae106de6f",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner re-read the decision: the tool contract now passes the validated arguments, and the host runs the tools rather than the application. No decision changed",
-          "at": 1795266533,
-          "previous_digest": "da2188c69d081bfeafe17cc21259c07213c18200608e42e45e20a4f1efa1a657"
+          "reason": "Owner re-read the decision: the tool contract gained a result budget and the peer offer carries the delegator's tool descriptions. No decision changed",
+          "at": 1795271685,
+          "previous_digest": "b754f3deb3120b3f658a7f3805d55b30b1140550c81f6174d8918deace4a8316"
         }
       },
       "kind": "acceptance",
