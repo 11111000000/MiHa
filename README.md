@@ -40,9 +40,10 @@ The full comparison, with what it costs us, is in
 
 ## The architecture, in one document
 
-**[docs/target-architecture.md](docs/target-architecture.md)** — the target design: the
-principle it is organised by, the five parts, the eight guarantees the model gets, the
-four budgets, the three seams, and what is deliberately absent.
+**[docs/target-architecture.md](docs/target-architecture.md)** — the target design,
+organised by four qualities of the harness itself: **effective · reliable · small ·
+frugal**. The five parts, the five budgets (bundle, result, turns, context, memory),
+the resident-memory law, and what is deliberately absent.
 
 [docs/architecture.md](docs/architecture.md) — the same design in the shape it has
 today: what the thing is, how a run works, where the peer boundary lies.
@@ -52,7 +53,7 @@ today: what the thing is, how a run works, where the peer boundary lies.
 | Path | What |
 |---|---|
 | `docs/plan.md` | **the route through the work**: what is built, in what order, how each piece is proved |
-| `docs/target-architecture.md` | **the target design**: the principle, the parts, the guarantees, the budgets |
+| `docs/target-architecture.md` | **the target design**: four qualities, five parts, five budgets, one memory law |
 | `docs/method.md` | **how this repository is developed**: the claim → code → proof → commit loop and the gate |
 | `docs/adr/0005-core-harness.md` | the core harness: the state machine, the tool contract, dispatch, the peer exchange |
 | `docs/adr/0006-alternatives.md` | the alternatives, and what we take from them |
