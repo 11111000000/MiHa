@@ -12,7 +12,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./core": "./src/core/index.ts",
-    "./schema": "./src/schema/index.ts"
+    "./schema": "./src/schema/index.ts",
+    "./llm": "./src/llm/index.ts"
   },
   "files": [
     "src"

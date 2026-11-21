@@ -52,7 +52,7 @@ Three budgets, all checked in CI, all failures of the build:
 
 | Budget | Limit | What it covers |
 |---|---|---|
-| **Bundle** | **≤ 30 000 B gzip**, browser target, minified | everything a host application loads |
+| **Bundle** | **≤ 30 000 B gzip**, browser target, minified | the core together with the provider layer — what an application that uses both loads |
 | **Layer** | per-layer file counts and code LOC | `core` 1 500 LOC, `schema` 500, `llm` 600, `exchange` 700, `worker` 500, `trace` 400 |
 | **Dependency** | **zero** runtime dependencies | the core imports nothing from npm |
 

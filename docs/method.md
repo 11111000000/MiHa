@@ -39,6 +39,13 @@ A claim whose control does not break the verifier is worse than no claim: it rep
 green that means nothing. `mathc run` proves the control, every time, in an isolated
 copy — so a claim that cannot fail cannot pass.
 
+**Try the control against the subject before you declare the claim.** A control that
+names a line the subject does not have changes nothing, and the method reports the
+claim as *inconclusive* rather than as proven. That is the method doing its job: two
+controls in this repository were declared against code that had not been written yet,
+and both had to be corrected. The rule is simply to run the control once against the
+subject before the claim is declared.
+
 **The subject must include the verifier.** A claim about `src/core/tools.ts` that does
 not name `test/tools.test.ts` leaves the test outside the coverage map, and a change to
 the test then invalidates nothing.

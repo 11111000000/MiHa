@@ -296,7 +296,7 @@ the run.
 | `core/event-stream.ts` | 110 | **77** | the stream and its laws |
 | `core/json.ts` | — | **10** | parsing that cannot throw |
 | `schema/` | 260 | **258** | the dialect and its validator |
-| `llm/` | 600 | — | SSE, the call tracker, the argument parser, the OpenAI-compatible adapter |
+| `llm/` | 600 | **306** | the SSE reader, the call tracker, the OpenAI-compatible adapter |
 | `exchange/` | 700 | — | the peer protocol and the transports |
 | `worker/` | 500 | — | the worker host and the capability bridge |
 | `trace/` | 250 | — | the run record and record/replay — the transcript itself is the trace |

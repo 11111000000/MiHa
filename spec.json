@@ -2,13 +2,7 @@
   "schema_version": 5,
   "goal": {
     "text": "MiHa is a reference-grade browser agent harness: its budget, its laws and its document graph are all machine-checked, and every claim below is proven with a negative control",
-    "scope": [
-      "docs/",
-      "scripts/",
-      "src/",
-      "test/",
-      "package.json"
-    ],
+    "scope": [ "docs/", "scripts/", "src/", "test/", "package.json" ],
     "by": "petr p.b.kosov@yandex.ru",
     "at": 1795174241,
     "reason": "The aim now covers the implementation and its budgets, not only the decision record"
@@ -17,21 +11,17 @@
     {
       "id": "docs-links-resolve",
       "text": "Every relative document link and every ADR supersedes target in the decision record resolves to a file that exists, and the supersedes chain terminates without looping",
-      "scope": [
-        "docs/",
-        "scripts/check-docs.mjs",
-        "README.md"
-      ],
+      "scope": [ "docs/", "scripts/check-docs.mjs", "README.md" ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
         "section": null,
-        "digest": "6e776f0b59fcdd5fbfcd68a5bc0f145abc7be7e7f1191c72d14a85742ef634e1",
+        "digest": "2b1d1d9855c219e9a32a3c275dbb370f7ddeb4afbe5f3b55ce3570fc35a302c8",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner directed that MiHa be its own harness and not a behavioural clone of pi: laws must carry derivations from the provider protocols, upstream's tests are not ported, and the session and trace formats are ours",
-          "at": 1795176997,
-          "previous_digest": "84ce31dc692f952214195ba5a7b966b1af367741a0f91339fcbbd3ae39f27e42"
+          "reason": "Owner re-read the decision: the layer diagram no longer names a protocol layer that the tree does not have, and the diagram is now checked against the tree",
+          "at": 1795242135,
+          "previous_digest": "6e776f0b59fcdd5fbfcd68a5bc0f145abc7be7e7f1191c72d14a85742ef634e1"
         }
       },
       "kind": "acceptance",
@@ -39,10 +29,7 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        {
-          "kind": "verifier",
-          "spec": "bun scripts/check-docs.mjs links"
-        }
+        { "kind": "verifier", "spec": "bun scripts/check-docs.mjs links" }
       ],
       "falsifier": "A document links to a file that does not exist, or an ADR names a missing or looping supersedes target",
       "register": "fact",
@@ -52,20 +39,17 @@
     {
       "id": "decisions-well-formed",
       "text": "Every decision label referenced anywhere in the documentation is defined by an ADR heading, each ADR's labels are contiguous from D1, and no ADR defines decisions that nothing else references",
-      "scope": [
-        "docs/adr/",
-        "scripts/check-docs.mjs"
-      ],
+      "scope": [ "docs/adr/", "scripts/check-docs.mjs" ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
         "section": null,
-        "digest": "6e776f0b59fcdd5fbfcd68a5bc0f145abc7be7e7f1191c72d14a85742ef634e1",
+        "digest": "2b1d1d9855c219e9a32a3c275dbb370f7ddeb4afbe5f3b55ce3570fc35a302c8",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner directed that MiHa be its own harness and not a behavioural clone of pi: laws must carry derivations from the provider protocols, upstream's tests are not ported, and the session and trace formats are ours",
-          "at": 1795176997,
-          "previous_digest": "84ce31dc692f952214195ba5a7b966b1af367741a0f91339fcbbd3ae39f27e42"
+          "reason": "Owner re-read the decision: the layer diagram was corrected to match the tree, and the layer agreement is now checked by a machine",
+          "at": 1795242142,
+          "previous_digest": "6e776f0b59fcdd5fbfcd68a5bc0f145abc7be7e7f1191c72d14a85742ef634e1"
         }
       },
       "kind": "acceptance",
@@ -86,20 +70,17 @@
     {
       "id": "measurements-attributed",
       "text": "Every measurement stated in the research documents carries a source: either a file and line, a URL, or a caption directly above the table that declares where the numbers come from",
-      "scope": [
-        "docs/research/",
-        "scripts/check-docs.mjs"
-      ],
+      "scope": [ "docs/research/", "scripts/check-docs.mjs" ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
         "section": null,
-        "digest": "6e776f0b59fcdd5fbfcd68a5bc0f145abc7be7e7f1191c72d14a85742ef634e1",
+        "digest": "2b1d1d9855c219e9a32a3c275dbb370f7ddeb4afbe5f3b55ce3570fc35a302c8",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner directed that MiHa be its own harness and not a behavioural clone of pi: laws must carry derivations from the provider protocols, upstream's tests are not ported, and the session and trace formats are ours",
-          "at": 1795176997,
-          "previous_digest": "84ce31dc692f952214195ba5a7b966b1af367741a0f91339fcbbd3ae39f27e42"
+          "reason": "Owner re-read the decision: the layer diagram was corrected to match the tree, and the layer agreement is now checked by a machine",
+          "at": 1795242142,
+          "previous_digest": "6e776f0b59fcdd5fbfcd68a5bc0f145abc7be7e7f1191c72d14a85742ef634e1"
         }
       },
       "kind": "acceptance",
@@ -120,21 +101,17 @@
     {
       "id": "budgets-enforced",
       "text": "The published browser bundle, the per-layer code-line budgets, the runtime dependency count and the absence of any in the source all hold within the limits declared in ADR 0004",
-      "scope": [
-        "src/",
-        "scripts/check-budget.mjs",
-        "package.json"
-      ],
+      "scope": [ "src/", "scripts/check-budget.mjs", "package.json" ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
         "section": null,
-        "digest": "5f39d7818b1cba531846fc58b3fad361770f61f406601ced89f063a122650af2",
+        "digest": "b73611722bbdd173d0b3884176fc9d668d160a86d06073c14eeea9286b8016fa",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner took the core design pass: the core is a pure transition system with a six-state machine, the transcript is append-only and appended by intent, the dispatch plan carries the tool it runs, and the layer budgets now reconcile with the module budgets",
-          "at": 1795180879,
-          "previous_digest": "20d26a9eb7e4fe0a2fd09cc04f09db583d94b44e6ebf190863bb585b7e79489d"
+          "reason": "Owner re-read the decision: the layer diagram was corrected to the tree it now describes, the bundle budget names what it covers, and the module table gained its measured column. No decision changed -- the corrections make the record match the code, and the layer agreement is now machine-checked",
+          "at": 1795242313,
+          "previous_digest": "5f39d7818b1cba531846fc58b3fad361770f61f406601ced89f063a122650af2"
         }
       },
       "kind": "acceptance",
@@ -142,10 +119,7 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        {
-          "kind": "verifier",
-          "spec": "bun scripts/check-budget.mjs"
-        }
+        { "kind": "verifier", "spec": "bun scripts/check-budget.mjs" }
       ],
       "falsifier": "The browser bundle exceeds 30 000 B gzip, a layer exceeds its line budget, a runtime dependency is declared, or any appears in src/",
       "register": "fact",
@@ -155,20 +129,17 @@
     {
       "id": "stream-laws",
       "text": "The event stream satisfies laws S1 to S5: events are delivered in push order exactly once, result resolves exactly once with the terminal value, events after the terminal are ignored, iteration ends after the terminal event, and no event is lost between a push and the start of iteration",
-      "scope": [
-        "src/core/event-stream.ts",
-        "test/event-stream.test.ts"
-      ],
+      "scope": [ "src/core/event-stream.ts", "test/event-stream.test.ts" ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
         "section": null,
-        "digest": "5f39d7818b1cba531846fc58b3fad361770f61f406601ced89f063a122650af2",
+        "digest": "b73611722bbdd173d0b3884176fc9d668d160a86d06073c14eeea9286b8016fa",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner took the core design pass: the core is a pure transition system with a six-state machine, the transcript is append-only and appended by intent, the dispatch plan carries the tool it runs, and the layer budgets now reconcile with the module budgets",
-          "at": 1795180880,
-          "previous_digest": "20d26a9eb7e4fe0a2fd09cc04f09db583d94b44e6ebf190863bb585b7e79489d"
+          "reason": "Owner re-read the decision: the layer diagram was corrected to the tree it now describes, the bundle budget names what it covers, and the module table gained its measured column. No decision changed -- the corrections make the record match the code, and the layer agreement is now machine-checked",
+          "at": 1795242313,
+          "previous_digest": "5f39d7818b1cba531846fc58b3fad361770f61f406601ced89f063a122650af2"
         }
       },
       "kind": "acceptance",
@@ -176,10 +147,7 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        {
-          "kind": "verifier",
-          "spec": "bun test test/event-stream.test.ts"
-        }
+        { "kind": "verifier", "spec": "bun test test/event-stream.test.ts" }
       ],
       "falsifier": "A law is broken: order or count of delivered events changes, result resolves with the wrong value or more than once, a late event is delivered, or an event pushed before iteration is lost",
       "register": "fact",
@@ -189,20 +157,17 @@
     {
       "id": "dialect-laws",
       "text": "The tool-parameter dialect satisfies laws C1 to C3: every value the dialect admits is accepted, every value it does not admit is rejected with a JSON Pointer path, and coercion happens only where the dialect declares it",
-      "scope": [
-        "src/schema/dialect.ts",
-        "test/dialect.test.ts"
-      ],
+      "scope": [ "src/schema/dialect.ts", "test/dialect.test.ts" ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
         "section": null,
-        "digest": "5f39d7818b1cba531846fc58b3fad361770f61f406601ced89f063a122650af2",
+        "digest": "b73611722bbdd173d0b3884176fc9d668d160a86d06073c14eeea9286b8016fa",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner took the core design pass: the core is a pure transition system with a six-state machine, the transcript is append-only and appended by intent, the dispatch plan carries the tool it runs, and the layer budgets now reconcile with the module budgets",
-          "at": 1795180880,
-          "previous_digest": "20d26a9eb7e4fe0a2fd09cc04f09db583d94b44e6ebf190863bb585b7e79489d"
+          "reason": "Owner re-read the decision: the layer diagram was corrected to the tree it now describes, the bundle budget names what it covers, and the module table gained its measured column. No decision changed -- the corrections make the record match the code, and the layer agreement is now machine-checked",
+          "at": 1795242313,
+          "previous_digest": "5f39d7818b1cba531846fc58b3fad361770f61f406601ced89f063a122650af2"
         }
       },
       "kind": "acceptance",
@@ -210,10 +175,7 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        {
-          "kind": "verifier",
-          "spec": "bun test test/dialect.test.ts"
-        }
+        { "kind": "verifier", "spec": "bun test test/dialect.test.ts" }
       ],
       "falsifier": "A value the dialect admits is rejected, a rejected value carries no path, or a value is coerced where the dialect did not ask for coercion",
       "register": "fact",
@@ -224,9 +186,7 @@
       "id": "tools-laws",
       "text": "The dispatch planner satisfies laws M1, M2 and M3 and policy T1: every call of a batch appears exactly once across the plan and the rejections, a call whose arguments did not arrive complete is never planned for execution, a failed tool is a result carrying isError rather than ordinary content, and an exclusive tool runs alone while shared tools around it still share a group",
       "scope": [
-        "src/core/tools.ts",
-        "src/core/permissions.ts",
-        "test/tools.test.ts"
+        "src/core/tools.ts", "src/core/permissions.ts", "test/tools.test.ts"
       ],
       "source": {
         "kind": "madr",
@@ -240,10 +200,7 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        {
-          "kind": "verifier",
-          "spec": "bun test test/tools.test.ts"
-        }
+        { "kind": "verifier", "spec": "bun test test/tools.test.ts" }
       ],
       "falsifier": "A call is planned and rejected at once or neither, a call with unparseable arguments reaches a group, a failure is reported as ordinary content, or an exclusive tool shares a group with another exclusive tool",
       "register": "fact",
@@ -254,9 +211,7 @@
       "id": "run-laws",
       "text": "The state machine and the driver together keep laws M1, M2, M3, M4 and T4 over a whole run: every tool call of every batch receives exactly one result including on rejection, tool failure, provider error and cancellation; a call with arguments that did not arrive complete is never executed; a failed tool is a result carrying isError; a provider failure is an event rather than a throw; and the tool results are recorded in assistant order",
       "scope": [
-        "src/core/run.ts",
-        "src/core/loop.ts",
-        "src/core/transcript.ts",
+        "src/core/run.ts", "src/core/loop.ts", "src/core/transcript.ts",
         "test/e2e.test.ts"
       ],
       "source": {
@@ -271,10 +226,7 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        {
-          "kind": "verifier",
-          "spec": "bun test test/e2e.test.ts"
-        }
+        { "kind": "verifier", "spec": "bun test test/e2e.test.ts" }
       ],
       "falsifier": "A call is left unanswered on any path, a call with unparseable arguments reaches a group, a failure becomes ordinary content or a thrown error, or the results are recorded in completion order",
       "register": "fact",
@@ -285,10 +237,7 @@
       "id": "gate-checks-pass",
       "text": "The commit gate runs every check that needs only bun — the budget, the documents and the tests — and all of them pass",
       "scope": [
-        "scripts/checks.sh",
-        "scripts/gate.sh",
-        "scripts/types.sh",
-        "src/",
+        "scripts/checks.sh", "scripts/gate.sh", "scripts/types.sh", "src/",
         "test/"
       ],
       "source": null,
@@ -297,14 +246,87 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        {
-          "kind": "verifier",
-          "spec": "sh scripts/checks.sh"
-        }
+        { "kind": "verifier", "spec": "sh scripts/checks.sh" }
       ],
       "falsifier": "One of the checks is not run by the gate, or one of them fails. The type check is deliberately not claimed: the isolated evidence copy is a git clone with no node_modules, so a control there would fail for a reason unrelated to its subject, and the method counts an infrastructure failure as no refutation at all",
       "register": "fact",
       "control": "sed -i 's/expect(seen).toEqual(\\[\\\"a\\\", \\\"b\\\", \\\"z\\\"\\]);/expect(seen).toEqual([\\\"WRONG\\\"]);/' test/event-stream.test.ts",
+      "waiver": null
+    },
+    {
+      "id": "provider-never-throws",
+      "text": "The provider adapter never throws and never rejects: a network failure, a refusal, a malformed chunk and a stream that ends without a terminal event all arrive at the core as an error event, so the core's pairing invariant survives a broken provider",
+      "scope": [ "src/llm/", "test/llm.test.ts" ],
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0005-core-harness.md",
+        "section": null,
+        "digest": "ae9323c7d8c46233598f46005ec25b873999b8008e5abfdf593dac6937e17209",
+        "review": {
+          "by": "petr p.b.kosov@yandex.ru",
+          "reason": "Owner re-read the decision: the layer diagram was corrected to the tree it now describes, the bundle budget names what it covers, and the module table gained its measured column. No decision changed -- the corrections make the record match the code, and the layer agreement is now machine-checked",
+          "at": 1795242313,
+          "previous_digest": "e37aa642e0b8aec2b31917d0409d4213fd84424ecbfb1e43b12e9911d485110e"
+        }
+      },
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        { "kind": "verifier", "spec": "bun test test/llm.test.ts" }
+      ],
+      "falsifier": "The adapter raises, or a stream that ends without a terminal event leaves the core waiting instead of receiving an error",
+      "register": "fact",
+      "control": "sed -i 's/if (!sawTerminal) {/if (false) {/' src/llm/openai-compat.ts",
+      "waiver": null
+    },
+    {
+      "id": "provider-arguments-intact",
+      "text": "Every fragment of a tool call's arguments reaches the core in order and attached to the right call: parallel calls are correlated by their stream index, the arguments of each call concatenate to exactly what the provider sent, and a call whose id arrives late still starts once and carries every fragment",
+      "scope": [ "src/llm/tool-calls.ts", "test/llm.test.ts" ],
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0005-core-harness.md",
+        "section": null,
+        "digest": "ae9323c7d8c46233598f46005ec25b873999b8008e5abfdf593dac6937e17209",
+        "review": {
+          "by": "petr p.b.kosov@yandex.ru",
+          "reason": "Owner re-read the decision: the layer diagram was corrected to the tree it now describes, the bundle budget names what it covers, and the module table gained its measured column. No decision changed -- the corrections make the record match the code, and the layer agreement is now machine-checked",
+          "at": 1795242313,
+          "previous_digest": "e37aa642e0b8aec2b31917d0409d4213fd84424ecbfb1e43b12e9911d485110e"
+        }
+      },
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        { "kind": "verifier", "spec": "bun test test/llm.test.ts" }
+      ],
+      "falsifier": "A fragment is lost, reordered, attached to the wrong call, or a call starts twice",
+      "register": "fact",
+      "control": "sed -i 's/this.#byIndex.get(delta.index)/this.#byIndex.get(0)/' src/llm/tool-calls.ts",
+      "waiver": null
+    },
+    {
+      "id": "layers-agree",
+      "text": "The layers named in the architectural decision are exactly the layers the source tree has, and every one of them has a declared budget",
+      "scope": [
+        "docs/adr/0002-core-harness.md", "scripts/layers.mjs",
+        "scripts/check-docs.mjs", "scripts/check-budget.mjs"
+      ],
+      "source": null,
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        { "kind": "verifier", "spec": "bun scripts/check-docs.mjs layers" }
+      ],
+      "falsifier": "The decision names a layer the tree does not have, the tree has a layer the decision does not name, or a layer has no budget",
+      "register": "fact",
+      "control": "sed -i 's|^core/        the message|core\\/        the message\\nmisc\\/        a layer nobody budgeted|' docs/adr/0002-core-harness.md",
       "waiver": null
     }
   ]

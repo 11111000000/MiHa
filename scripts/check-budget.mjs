@@ -12,24 +12,17 @@
  * counter would parse strings, and a counter that can be fooled is not a budget.
  */
 
-import { readFileSync, readdirSync, statSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve, relative } from "node:path";
+import { LAYERS } from "./layers.mjs";
 
 const ROOT = resolve(import.meta.dirname, "..");
 
 const BUNDLE_LIMIT_BYTES = 30_000;
-const LAYER_LIMITS = {
-	root: 50,
-	core: 1500,
-	schema: 500,
-	llm: 600,
-	exchange: 700,
-	worker: 500,
-	trace: 400,
-};
+const LAYER_LIMITS = LAYERS;
 const DEPENDENCY_LIMIT = 0;
 
 const findings = [];
@@ -63,20 +56,37 @@ function codeLines(file) {
 
 /* ------------------------------------------------------------------ bundle */
 
+/**
+ * Measures a bundle and returns its gzipped size.
+ *
+ * The entry may be several barrels at once: an application that uses the provider
+ * layer loads it together with the core, and the ceiling is on what an application
+ * loads, not on what one barrel happens to export.
+ */
+function measure(entries, outDir) {
+	const entry = join(outDir, "entry.ts");
+	const names = entries.map((_, index) => `m${index}`);
+	writeFileSync(
+		entry,
+		`${entries.map((path, index) => `import * as m${index} from ${JSON.stringify(path)};`).join("\n")}\nexport { ${names.join(", ")} };\n`,
+	);
+	execFileSync(
+		"bun",
+		["build", "--target=browser", "--minify", "--outfile", join(outDir, "bundle.js"), entry],
+		{ cwd: ROOT, stdio: "pipe" },
+	);
+	return gzipSync(readFileSync(join(outDir, "bundle.js")), { level: 9 }).byteLength;
+}
+
 function checkBundle() {
 	const outDir = mkdtempSync(join(tmpdir(), "miha-budget-"));
 	try {
-		execFileSync(
-			"bun",
-			["build", "--target=browser", "--minify", "--outfile", join(outDir, "bundle.js"), join(ROOT, "src/index.ts")],
-			{ cwd: ROOT, stdio: "pipe" },
-		);
-		const raw = readFileSync(join(outDir, "bundle.js"));
-		const gz = gzipSync(raw, { level: 9 }).byteLength;
-		const headroom = BUNDLE_LIMIT_BYTES - gz;
-		console.log(`bundle   ${gz} B gzip (limit ${BUNDLE_LIMIT_BYTES} B, headroom ${headroom} B)`);
-		if (gz > BUNDLE_LIMIT_BYTES) {
-			fail(`bundle is ${gz} B gzip, over the ${BUNDLE_LIMIT_BYTES} B ceiling by ${-headroom} B`);
+		const core = measure([join(ROOT, "src/index.ts")], outDir);
+		const everything = measure([join(ROOT, "src/index.ts"), join(ROOT, "src/llm/index.ts")], outDir);
+
+		console.log(`bundle   core ${core} B gzip, with the provider layer ${everything} B gzip (limit ${BUNDLE_LIMIT_BYTES} B)`);
+		if (everything > BUNDLE_LIMIT_BYTES) {
+			fail(`the bundle is ${everything} B gzip, over the ${BUNDLE_LIMIT_BYTES} B ceiling by ${everything - BUNDLE_LIMIT_BYTES} B`);
 		}
 	} catch (error) {
 		fail(`bundle build failed: ${error.message}`);

@@ -77,18 +77,20 @@ MiHa ships as a single npm package. Its modules are grouped into layers and the
 dependency direction between them is fixed and enforced:
 
 ```
-protocol/    types and pure helpers shared by everything: messages, events, tool
-             contracts, model and stream options, session entries, exchange frames
+schema/      the tool-parameter dialect: its types, the validator, the conversion
+             to the provider's JSON Schema
    ↑
-core/        the agent loop, the Agent facade, the event stream, tool resolution
-             and dispatch, compaction
+core/        the message and event algebras, the tool contract and dispatch, the
+             transcript, the state machine, the driver
    ↑
-{ worker, exchange, llm, tools }   placements and adapters that implement core-side
-                                    interfaces
+{ llm, exchange, worker, trace, ui }   adapters, placements and views that implement
+                                        core-side interfaces
 ```
 
-`protocol/` has no imports. `core/` imports only `protocol/`. Everything above imports
-`core/` and `protocol/`. Nothing imports upward.
+`schema/` has no imports. `core/` imports only `schema/`. Everything above imports
+`core/` and `schema/`. Nothing imports upward. The type surface is part of `core/`
+rather than a layer of its own — a layer that only holds types buys an import
+boundary and nothing else.
 
 A single package rather than a workspace: the boundary that matters is browser versus
 Node, and it is enforced against the bundle, not by package boundaries. A layer that

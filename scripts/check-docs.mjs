@@ -13,6 +13,7 @@
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
+import { NAMED_LAYERS } from "./layers.mjs";
 import { dirname, join, relative, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
@@ -225,10 +226,75 @@ function checkAttribution() {
 	}
 }
 
+/* ------------------------------------------------------------------- layers */
+
+const LAYER_DECISION = "docs/adr/0002-core-harness.md";
+
+/**
+ * The layers the architectural decision names.
+ *
+ * It is the code block in decision D1 that draws the dependency direction. Both forms
+ * are read: a layer on its own line, and a brace group of layers.
+ */
+function layersNamedByTheDecision() {
+	const text = readFileSync(join(ROOT, LAYER_DECISION), "utf8");
+	const blocks = text.match(/```[a-z]*\n([\s\S]*?)```/g) ?? [];
+	const diagram = blocks.find((block) => block.includes("\u2191"));
+	if (!diagram) return undefined;
+
+	const named = new Set();
+	for (const line of diagram.split("\n")) {
+		const single = /^\s*([a-z][a-z-]*)\/\s/.exec(line);
+		if (single) {
+			named.add(single[1]);
+			continue;
+		}
+		const group = /^\s*\{([^}]+)\}/.exec(line);
+		if (group) {
+			for (const name of group[1].split(",")) {
+				const trimmed = name.trim();
+				if (trimmed.length > 0) named.add(trimmed);
+			}
+		}
+	}
+	return named;
+}
+
+function checkLayers() {
+	const named = layersNamedByTheDecision();
+	if (!named) {
+		fail("the architectural decision has no layer diagram to read");
+		return;
+	}
+
+	const declared = new Set(NAMED_LAYERS);
+	for (const layer of named) {
+		if (!declared.has(layer)) fail(`the decision names the layer "${layer}", which has no declared budget`);
+	}
+	for (const layer of declared) {
+		if (!named.has(layer)) fail(`the layer "${layer}" has a budget but the decision does not name it`);
+	}
+
+	const present = new Set();
+	for (const entry of readdirSync(join(ROOT, "src"), { withFileTypes: true })) {
+		if (entry.isDirectory()) present.add(entry.name);
+	}
+	for (const layer of present) {
+		if (!declared.has(layer)) fail(`the source tree has the layer "${layer}", which has no declared budget`);
+	}
+
+	console.log(`layers   ${[...declared].sort().join(", ")}`);
+}
+
 /* ------------------------------------------------------------------- main */
 
 const mode = process.argv[2];
-const checks = { links: checkLinks, decisions: checkDecisions, attribution: checkAttribution };
+const checks = {
+	links: checkLinks,
+	decisions: checkDecisions,
+	attribution: checkAttribution,
+	layers: checkLayers,
+};
 
 if (!checks[mode]) {
 	console.error(`usage: bun scripts/check-docs.mjs <${Object.keys(checks).join("|")}>`);

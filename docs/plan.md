@@ -84,14 +84,24 @@ execute, so the driver had nothing to feed back and the batch never closed — t
 rejections never reached the transcript. The fix is in the core, not the driver: a batch
 with nothing to run is already answered, and closes where it was planned.
 
-### 6. The provider layer
+### 6. The provider layer — **done**
 
-`src/llm/` — the SSE reader, the tool-call correlation tracker, the strict argument
-parser, one OpenAI-compatible adapter.
+`src/llm/` — 306 code lines. The SSE reader, the tool-call correlation tracker, one
+OpenAI-compatible adapter.
 
-Proven by: the adapter's conformance fixtures — a stream that ends without a terminal
-event is an error, not a hang; the final frame may lack a newline; parallel calls are
-correlated correctly.
+Proven by: two claims — `provider-never-throws` and `provider-arguments-intact` —
+covering a network failure, a refusal, a malformed chunk, a stream that ends without a
+terminal event, a record that arrives without a trailing newline, parallel calls
+correlated by index, and a call whose id arrives late.
+
+**Two lessons from this slice.** The claims were declared *before* the code, and the
+method immediately earned its keep: two of the three controls did not match the code as
+written, and the method reported them as *inconclusive* rather than as proofs. A control
+that changes nothing is not a control, and only the method notices.
+
+The second lesson: the architectural decision named a `protocol/` layer that the tree
+never had. Nothing caught it until a check compared the decision with the tree. It does
+now.
 
 ### 7. The worker host and the capability bridge
 
