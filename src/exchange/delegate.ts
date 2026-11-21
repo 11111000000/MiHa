@@ -130,7 +130,12 @@ export function delegate(options: DelegateOptions): DelegatedTask {
 		}
 
 		try {
-			const result = await entry.tool.execute(entry.call, new AbortController().signal, () => {});
+			const result = await entry.tool.execute(
+				entry.call,
+				entry.args,
+				new AbortController().signal,
+				() => {},
+			);
 			port.post({ kind: "answer", taskId, callId, ok: true, result });
 		} catch (error) {
 			port.post({ kind: "answer", taskId, callId, ok: false, error: messageOf(error) });

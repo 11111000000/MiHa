@@ -88,7 +88,9 @@ function options(overrides: Partial<DelegateOptions> = {}): DelegateOptions {
 	return { ...base, ...overrides };
 }
 
-function agentEvent(type: "agent_start" | "turn_start" | "message_start" | "message_end"): AgentEvent {
+function agentEvent(
+	type: "agent_start" | "turn_start" | "message_start" | "message_end" | "agent_end",
+): AgentEvent {
 	switch (type) {
 		case "agent_start":
 			return { type: "agent_start" };
@@ -98,6 +100,8 @@ function agentEvent(type: "agent_start" | "turn_start" | "message_start" | "mess
 			return { type: "message_start", id: "m1", role: "assistant" };
 		case "message_end":
 			return { type: "message_end", id: "m1", message: assistantMessage([], "stop") };
+		case "agent_end":
+			return { type: "agent_end", messages: [], outcome: { kind: "completed" } };
 	}
 }
 
@@ -234,6 +238,84 @@ describe("the delegating side of the exchange", () => {
 
 		const outcome = await settles(task.outcome);
 		expect(outcome.kind).toBe("failed");
+		expect(outcome.kind === "failed" ? outcome.error : undefined).toBe("the backend is busy");
+	});
+
+	test("the peer's outcome is taken verbatim", async () => {
+		const channels = pair();
+		const task = delegate({ ...options(), port: channels.down });
+
+		channels.up.post({
+			kind: "result",
+			taskId: "t1",
+			outcome: { kind: "failed", error: "the peer's own failure" },
+		});
+
+		const outcome = await settles(task.outcome);
+		expect(outcome).toEqual({ kind: "failed", error: "the peer's own failure" });
+	});
+
+	test("a tool that throws is answered with a failure, not a crash", async () => {
+		const channels = pair();
+		const boom: ToolDefinition = {
+			name: "boom",
+			description: "fails",
+			parameters: { kind: "object", properties: {} },
+			execute: async () => {
+				throw new Error("the tool is on fire");
+			},
+		};
+		delegate({ ...options(), port: channels.down, tools: toolRegistry([boom]) });
+
+		channels.up.post({ kind: "call", taskId: "t1", callId: "c1", tool: "boom", args: {} });
+		await settles(new Promise((resolve) => setTimeout(resolve, 10)));
+
+		const answers = channels.sent.filter((frame) => frame.kind === "answer");
+		expect(answers).toHaveLength(1);
+		const answer = answers[0];
+		if (answer?.kind !== "answer") throw new Error("no answer");
+		expect(answer.ok).toBe(false);
+		expect(answer.error).toContain("the tool is on fire");
+	});
+
+	test("every event the peer sends is forwarded, the last one included", async () => {
+		const channels = pair();
+		const task = delegate({ ...options(), port: channels.down });
+
+		channels.up.post({ kind: "event", taskId: "t1", event: agentEvent("message_start") });
+		channels.up.post({ kind: "event", taskId: "t1", event: agentEvent("agent_end") });
+		channels.up.post({ kind: "result", taskId: "t1", outcome: { kind: "completed" } });
+
+		const seen: string[] = [];
+		for await (const event of task.events) seen.push(event.type);
+		expect(seen).toEqual(["message_start", "agent_end"]);
+	});
+
+	test("two calls are answered with their own ids", async () => {
+		const channels = pair();
+		delegate({ ...options(), port: channels.down });
+
+		channels.up.post({
+			kind: "call",
+			taskId: "t1",
+			callId: "c1",
+			tool: "read_file",
+			args: { path: "a.txt" },
+		});
+		channels.up.post({
+			kind: "call",
+			taskId: "t1",
+			callId: "c2",
+			tool: "read_file",
+			args: { path: "b.txt" },
+		});
+		await settles(new Promise((resolve) => setTimeout(resolve, 10)));
+
+		const answers = channels.sent.filter((frame) => frame.kind === "answer");
+		expect(answers.map((answer) => (answer.kind === "answer" ? answer.callId : ""))).toEqual([
+			"c1",
+			"c2",
+		]);
 	});
 
 	test("cancelling tells the peer", () => {

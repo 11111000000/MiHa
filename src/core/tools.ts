@@ -35,8 +35,17 @@ export interface ToolDefinition {
 	readonly execute: ToolExecute;
 }
 
+/**
+ * What a tool does.
+ *
+ * The tool receives the **validated arguments**, not the raw text: the core has already
+ * parsed them, checked them against the tool's dialect and applied whatever the
+ * permission hook decided — including a rewrite of the arguments. A tool that re-parsed
+ * the text would run something the core never checked.
+ */
 export type ToolExecute = (
 	call: ToolCallBlock,
+	args: Readonly<Record<string, unknown>>,
 	signal: AbortSignal,
 	report: (partial: ToolResult) => void,
 ) => Promise<ToolResult>;

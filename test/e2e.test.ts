@@ -36,9 +36,9 @@ const readFile: ToolDefinition = {
 		properties: { path: { kind: "string" } },
 		required: ["path"],
 	},
-	execute: async (call) => {
-		const args = JSON.parse(call.argumentsText) as { path: string };
-		return { content: [{ type: "text", text: `contents of ${args.path}` }] };
+	execute: async (_call, args) => {
+		const path = String(args.path);
+		return { content: [{ type: "text", text: `contents of ${path}` }] };
 	},
 };
 
@@ -60,17 +60,12 @@ function config(turnLimit = 8, tools: readonly ToolDefinition[] = [readFile]): H
 	};
 }
 
-function host(
-	callProvider: HarnessHost["callProvider"],
-	callTool?: (plan: ToolCallPlan, signal: AbortSignal) => Promise<ToolResult>,
-): HarnessHost {
-	return {
-		callProvider,
-		callTool: async (plan, signal) => {
-			if (callTool) return callTool(plan, signal);
-			return plan.tool.execute(plan.call, signal, () => {});
-		},
-	};
+/**
+ * The host does not run tools: the driver does. The host owns the provider and the
+ * permission hook, and that is all it needs to own.
+ */
+function host(callProvider: HarnessHost["callProvider"]): HarnessHost {
+	return { callProvider };
 }
 
 function done(stopReason: "stop" | "toolUse"): ProviderEvent {
@@ -226,13 +221,18 @@ describe("law M1 — the pairing survives every path", () => {
 			[{ type: "text_delta", delta: "sorry" }, done("stop")],
 		];
 
-		const run = runAgent(
-			config(),
-			host(scriptedProvider(script), async () => {
+		const burningRead: ToolDefinition = {
+			name: "read_file",
+			description: "reads a file",
+			parameters: { kind: "object", properties: { path: { kind: "string" } }, required: ["path"] },
+			execute: async () => {
 				throw new Error("the disk is on fire");
-			}),
-			{ message: userMessage("read a.txt") },
-		);
+			},
+		};
+
+		const run = runAgent(config(8, [burningRead]), host(scriptedProvider(script)), {
+			message: userMessage("read a.txt"),
+		});
 		const { events } = await collect(run);
 
 		const end = events.find((event) => event.type === "agent_end");
@@ -258,12 +258,19 @@ describe("law M1 — the pairing survives every path", () => {
 		];
 
 		let executed = false;
-		const run = runAgent(
-			config(),
-			host(scriptedProvider(script), async () => {
+		const countingRead: ToolDefinition = {
+			name: "read_file",
+			description: "reads a file",
+			parameters: { kind: "object", properties: { path: { kind: "string" } }, required: ["path"] },
+			execute: async () => {
 				executed = true;
 				return { content: [] };
-			}),
+			},
+		};
+
+		const run = runAgent(
+			config(8, [countingRead]),
+			host(scriptedProvider(script)),
 			{ message: userMessage("read a.txt") },
 		);
 		const { events } = await collect(run);
@@ -343,16 +350,21 @@ describe("law T4 — the results are recorded in assistant order", () => {
 
 		// c1 is the slow one, so the calls complete in the opposite order to the one
 		// the assistant asked in.
-		const callTool = async (plan: ToolCallPlan): Promise<ToolResult> => {
-			if (plan.call.id === "c1") await sleep(20);
-			return {
-				content: [
-					{ type: "text", text: plan.call.id === "c1" ? "contents of a.txt" : "contents of b.txt" },
-				],
-			};
+		const slowRead: ToolDefinition = {
+			name: "read_file",
+			description: "reads a file",
+			parameters: { kind: "object", properties: { path: { kind: "string" } }, required: ["path"] },
+			execute: async (call) => {
+				if (call.id === "c1") await sleep(20);
+				return {
+					content: [
+						{ type: "text", text: call.id === "c1" ? "contents of a.txt" : "contents of b.txt" },
+					],
+				};
+			},
 		};
 
-		const run = runAgent(config(), host(scriptedProvider(script), callTool), {
+		const run = runAgent(config(8, [slowRead]), host(scriptedProvider(script)), {
 			message: userMessage("read both"),
 		});
 		const { events } = await collect(run);
@@ -381,16 +393,22 @@ describe("policy T1 — the groups of a plan run in order", () => {
 		];
 
 		const order: string[] = [];
-		const callTool = async (plan: ToolCallPlan): Promise<ToolResult> => {
-			order.push(`start ${plan.call.id}`);
-			await sleep(plan.call.id === "c1" ? 20 : 1);
-			order.push(`end ${plan.call.id}`);
-			return { content: [{ type: "text", text: plan.call.id }] };
+		const orderedList: ToolDefinition = {
+			name: "list_dir",
+			description: "lists a directory",
+			parameters: { kind: "object", properties: {} },
+			concurrency: "exclusive",
+			execute: async (call) => {
+				order.push(`start ${call.id}`);
+				await sleep(call.id === "c1" ? 20 : 1);
+				order.push(`end ${call.id}`);
+				return { content: [{ type: "text", text: call.id }] };
+			},
 		};
 
 		const run = runAgent(
-			config(8, [readFile, listDir]),
-			host(scriptedProvider(script), callTool),
+			config(8, [orderedList]),
+			host(scriptedProvider(script)),
 			{ message: userMessage("list twice") },
 		);
 		await collect(run);
@@ -476,15 +494,22 @@ describe("cancellation", () => {
 
 		const started = latch();
 		const controller = new AbortController();
-		const run = runAgent(
-			config(),
-			host(scriptedProvider(script), async (_plan, signal) => {
+		const abortableRead: ToolDefinition = {
+			name: "read_file",
+			description: "reads a file",
+			parameters: { kind: "object", properties: { path: { kind: "string" } }, required: ["path"] },
+			execute: async (_call, _args, signal) => {
 				started.release();
 				await new Promise<void>((resolve) => {
 					signal.addEventListener("abort", () => resolve(), { once: true });
 				});
 				throw new Error("the tool was aborted");
-			}),
+			},
+		};
+
+		const run = runAgent(
+			config(8, [abortableRead]),
+			host(scriptedProvider(script)),
 			{ message: userMessage("read a.txt"), signal: controller.signal },
 		);
 

@@ -103,22 +103,25 @@ The second lesson: the architectural decision named a `protocol/` layer that the
 never had. Nothing caught it until a check compared the decision with the tree. It does
 now.
 
-### 7. The worker host and the capability bridge — **the bridge is done**
+### 7. The worker host and the capability bridge — **done**
 
-`src/worker/bridge.ts` — 114 code lines. The capability bridge: the worker asks the
-host for the things a worker cannot have — the DOM, the storage, the clipboard — and the
-host answers.
+`src/worker/bridge.ts` and `src/worker/host.ts` — 181 code lines. The bridge lets the
+worker ask the host for the things a worker cannot have — the DOM, the storage, the
+clipboard — and the host owns the realm: it hands over the capabilities, forwards the
+worker's events to the application, and ends the realm.
 
-Proven by: five claims — `bridge-closed`, `bridge-failures-are-values`,
-`bridge-answers-the-caller`, `bridge-carrying-failures-are-values` and
-`bridge-answers-once` — covering a capability that was not registered, one that throws,
-one that rejects, two concurrent calls, a value the channel cannot carry in either
-direction, and a call answered twice.
+Proven by six claims. Five are about the bridge — `bridge-closed`,
+`bridge-failures-are-values`, `bridge-answers-the-caller`,
+`bridge-carrying-failures-are-values` and `bridge-answers-once` — covering a capability
+that was not registered, one that throws, one that rejects, two concurrent calls, a value
+the channel cannot carry in either direction, and a call answered twice. The sixth,
+`worker-host-laws`, is about the host: the set of capability names the worker can reach
+is exactly the set of own keys of the application's table, every event frame reaches the
+application unchanged and in order, nothing is posted after the realm ended (including an
+answer to a call that was in flight), and no exception from the worker, a capability or
+the channel escapes into the application's thread.
 
-Still to do: the host that *owns* the worker — spawning it, forwarding the events to the
-interface, and terminating it. That is the next slice.
-
-**What this slice cost.** Four things the method caught that a test alone would not
+**What this slice cost.** Five things the method caught that a test alone would not
 have:
 
 - The implementation let a broken channel raise out of the host, which in the
@@ -134,11 +137,15 @@ have:
   leaked `Object.prototype`, a cancelled run answered one call twice, a provider failure
   mid-batch dropped the streamed call, and the external abort signal did nothing at all.
   Every one of those had a control, and every control was proven.
+- A second discriminator found that the host's own guard was **dead code** — the bridge
+  swallowed the worker's failure first, so the "never raises" evidence belonged to a
+  different module. The claim's scope now names the bridge too.
 
 That last point is the one to keep: a proven control says the verifier is sensitive to
 *that* mutation. It says nothing about the mutations nobody thought of. A claim is
 settled only after a discriminator has tried to break it — see
 [docs/discriminator.md](./discriminator.md).
+
 
 ### 8. The peer exchange — **the delegating side is done**
 
@@ -147,10 +154,12 @@ offers a task; the backend's events arrive in order; a call the backend makes ru
 through the frontend's own dispatch, so the arguments are validated against the tool's
 dialect and the frontend's permission hook applies to it.
 
-Proven by: the claim `exchange-delegate-laws` — the offer is sent once, the events
-arrive in order, an unregistered tool is answered with a failure rather than a crash,
-the permission hook applies, a refusal becomes a failure carrying the reason, and a
-frame for another task is not ours.
+Proven by: the claim `exchange-delegate-laws` — the offer is sent once, every event the
+peer sends is forwarded in order, an unregistered tool is answered with a failure rather
+than a crash, the permission hook applies **and its rewrite reaches the tool**, a
+throwing tool is answered rather than crashing the delegator, a refusal becomes a
+failure carrying the reason, every answer carries the call's own id, and a frame for
+another task is not ours.
 
 Still to do: the **receiving side** — the side that accepts a task, runs its own agent
 on it, and calls back. The protocol is symmetric, so that side is this code read from

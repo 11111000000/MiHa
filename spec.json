@@ -262,12 +262,12 @@
         "kind": "madr",
         "path": "docs/adr/0005-core-harness.md",
         "section": null,
-        "digest": "da2188c69d081bfeafe17cc21259c07213c18200608e42e45e20a4f1efa1a657",
+        "digest": "b754f3deb3120b3f658a7f3805d55b30b1140550c81f6174d8918deace4a8316",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner re-read the decision: the module table gained its measured column and the exchange decision records that the delegating side is built. No decision changed",
-          "at": 1795256345,
-          "previous_digest": "0aba0b7fb4880ba6808e92c1f677a4ec42497e5200c1e9f246fec7ac3d47f9d2"
+          "reason": "Owner re-read the decision: the tool contract now passes the validated arguments, and the host runs the tools rather than the application. No decision changed",
+          "at": 1795266533,
+          "previous_digest": "da2188c69d081bfeafe17cc21259c07213c18200608e42e45e20a4f1efa1a657"
         }
       },
       "kind": "acceptance",
@@ -290,12 +290,12 @@
         "kind": "madr",
         "path": "docs/adr/0005-core-harness.md",
         "section": null,
-        "digest": "da2188c69d081bfeafe17cc21259c07213c18200608e42e45e20a4f1efa1a657",
+        "digest": "b754f3deb3120b3f658a7f3805d55b30b1140550c81f6174d8918deace4a8316",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner re-read the decision: the module table gained its measured column and the exchange decision records that the delegating side is built. No decision changed",
-          "at": 1795256345,
-          "previous_digest": "0aba0b7fb4880ba6808e92c1f677a4ec42497e5200c1e9f246fec7ac3d47f9d2"
+          "reason": "Owner re-read the decision: the tool contract now passes the validated arguments, and the host runs the tools rather than the application. No decision changed",
+          "at": 1795266533,
+          "previous_digest": "da2188c69d081bfeafe17cc21259c07213c18200608e42e45e20a4f1efa1a657"
         }
       },
       "kind": "acceptance",
@@ -417,8 +417,11 @@
     },
     {
       "id": "worker-host-laws",
-      "text": "The worker host exposes only the capabilities the application registered, forwards the worker's events to the application in the order they were sent, answers nothing once the realm has been terminated, and never raises: a worker whose postMessage throws leaves the application running and the host usable",
-      "scope": [ "src/worker/host.ts", "test/worker-host.test.ts" ],
+      "text": "The worker host hands the bridge the application's capability table and nothing else, so the set of capability names the worker can reach is exactly the set of own keys of that table. It passes every event frame it receives to onEvent, unchanged and in arrival order. After terminate() returns it posts no further frame to the worker, including an answer to a call that was in flight. It never lets an exception from the worker, a capability or the channel escape into the application's thread; an exception raised by the application's own onEvent callback is the application's, and propagates",
+      "scope": [
+        "src/worker/host.ts", "src/worker/bridge.ts",
+        "test/worker-host.test.ts", "test/worker.test.ts"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
@@ -431,17 +434,22 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/worker-host.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/worker-host.test.ts test/worker.test.ts"
+        }
       ],
       "falsifier": "The worker reaches a capability the host did not register, an event arrives out of order or not at all, a call that arrives after the realm ended is answered, or the host raises out of a broken worker",
       "register": "fact",
-      "control": "sed -i -E 's/(terminate[^a-zA-Z]{0,12}\\{)/& return;/; s/terminate: \\(\\) => worker\\.terminate\\(\\)/terminate: () => undefined/' src/worker/host.ts",
+      "control": "sed -i -E 's/(terminate[^a-zA-Z]{0,12}\\{)/& return;/' src/worker/host.ts",
       "waiver": null
     },
     {
       "id": "exchange-delegate-laws",
-      "text": "The delegating side of the exchange offers a task once, forwards the peer's events in order, runs a call the peer makes through the host's own dispatch -- so the arguments are validated against the tool's dialect and the permission hook applies -- answers a call it cannot run with a failure rather than a crash, resolves with the peer's outcome, and turns a refusal into a failure carrying the reason",
-      "scope": [ "src/exchange/", "test/exchange.test.ts" ],
+      "text": "The delegating side sends exactly one offer, carrying the task id, the task, the context and the names of the tools the peer may call. It forwards every event the peer sends for that task, in arrival order, and ignores frames for another task. A call the peer makes is planned by the host's own dispatch -- the arguments are validated against the tool's dialect, the permission hook's decision and any rewritten arguments both apply, and the tool runs with the arguments the plan carries. A call it cannot run -- unknown tool, invalid arguments, refused by the hook, or a tool that throws -- is answered with a failure carrying the reason, and no exception leaves the delegating side. Every answer carries the task id and the call id of the call it answers. The task resolves with the peer's outcome verbatim, and a refusal resolves as a failure whose error is the peer's reason",
+      "scope": [
+        "src/exchange/", "src/core/tools.ts", "test/exchange.test.ts"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",

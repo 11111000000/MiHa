@@ -8,11 +8,13 @@
  *
  * - **The capability set is closed.** The worker reaches what the application
  *   registered and nothing else. The bridge enforces that, and the host hands the
- *   bridge nothing but the application's own table.
+ *   bridge the application's own table — not a copy of it, because a table the
+ *   host owns is a table the host may grow.
  * - **The events arrive in order.** The interface renders them, and a transcript
  *   rendered out of order is a lie.
  * - **Termination is final.** `worker.terminate()` is the only guaranteed hard
- *   stop, and after it the host answers nothing — there is nobody left to answer.
+ *   stop, and after it the host posts nothing — there is nobody left to answer,
+ *   and an answer to a call that was in flight belongs to nobody.
  * - **The host never raises.** It runs in the application's thread, where an
  *   unhandled rejection is the application's problem. A broken worker leaves the
  *   caller waiting, and that is the end of it.
@@ -80,6 +82,11 @@ export function createWorkerHost(worker: WorkerLike, options: WorkerHostOptions)
 
 	const channel: Channel = {
 		post(message: unknown) {
+			if (!alive) {
+				// The realm is over. There is nobody left to carry the frame, and an
+				// answer that arrives after the end is owed to nobody.
+				return;
+			}
 			try {
 				worker.postMessage(message);
 			} catch {
@@ -115,7 +122,13 @@ export function createWorkerHost(worker: WorkerLike, options: WorkerHostOptions)
 			alive = false;
 			listeners.length = 0;
 			worker.onmessage = null;
-			worker.terminate();
+			try {
+				worker.terminate();
+			} catch {
+				// A worker that cannot be terminated is broken, and a broken worker must
+				// not break the application. The host stops talking to it either way:
+				// from here on the realm is over.
+			}
 		},
 	};
 }

@@ -78,10 +78,10 @@ function strictPair(): { up: Channel; down: Channel } {
 /**
  * A promise that is supposed to settle, raced against a short timer.
  *
- * Bun's per-test timeout does not fire on a promise that never settles: the await
- * simply waits, and the whole run hangs. A hung gate is worse than a failing one, so
- * every promise that must settle goes through here — and one that does not fails the
- * test quickly, with a message that says so.
+ * Bun's per-test timeout does fire on a bare promise that never settles — but not
+ * on `expect(promise).rejects.toThrow(...)`, which waits forever, and a hung gate
+ * is worse than a failing one. So every promise that must settle goes through here,
+ * and one that does not fails the test in a second, with a message that says so.
  */
 async function settles<T>(promise: Promise<T>, ms = 1000): Promise<T> {
 	let timer: ReturnType<typeof setTimeout> | undefined;

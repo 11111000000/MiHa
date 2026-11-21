@@ -40,12 +40,6 @@ export interface HarnessHost {
 		request: ProviderRequest,
 		signal: AbortSignal,
 	) => AsyncIterable<ProviderEvent>;
-	/** Performs one tool. The driver turns a throw into a result (law M3). */
-	readonly callTool: (
-		call: ToolCallPlan,
-		signal: AbortSignal,
-		report: (partial: ToolResult) => void,
-	) => Promise<ToolResult>;
 	/** Persists a transcript entry. The host may stamp it with a time. */
 	readonly append?: (entry: TranscriptEntry) => void;
 }
@@ -125,7 +119,7 @@ export function runAgent(
 					}
 					break;
 				case "tool_plan":
-					await runPlan(host, intent.plan, signal, (result) => {
+					await runPlan(intent.plan, signal, (result) => {
 						apply({ kind: "tool_result", result });
 					}, (toolCallId, partial) => {
 						apply({ kind: "tool_progress", toolCallId, partial });
@@ -163,25 +157,25 @@ export function runAgent(
  * records them in assistant order (law T4).
  */
 async function runPlan(
-	host: HarnessHost,
 	plan: ToolPlan,
 	signal: AbortSignal,
 	accept: (result: ToolResultMessage) => void,
 	progress: (toolCallId: string, partial: ToolResult) => void,
 ): Promise<void> {
 	for (const group of plan.groups) {
-		await Promise.all(group.map((entry) => runOne(host, entry, signal, accept, progress)));
+		await Promise.all(group.map((entry) => runOne(entry, signal, accept, progress)));
 	}
 }
 
 /**
  * Runs one call.
  *
- * The host does the running, not the driver: the host owns the tool, so the host may
- * wrap it, time it, or refuse it. A throw becomes a result (law M3).
+ * The **driver** runs the tool, not the host. The host owns the tool's *policy* — the
+ * permission hook, which the dispatch has already applied — and the *capabilities* the
+ * tool may use. Running the tool here means the tool always receives the arguments the
+ * dispatch validated, including any the hook rewrote. A throw becomes a result (M3).
  */
 async function runOne(
-	host: HarnessHost,
 	entry: ToolCallPlan,
 	signal: AbortSignal,
 	accept: (result: ToolResultMessage) => void,
@@ -189,7 +183,12 @@ async function runOne(
 ): Promise<void> {
 	let result: ToolResult;
 	try {
-		result = await host.callTool(entry, signal, (partial) => progress(entry.call.id, partial));
+		result = await entry.tool.execute(
+			entry.call,
+			entry.args,
+			signal,
+			(partial) => progress(entry.call.id, partial),
+		);
 	} catch (error) {
 		accept(failureResult(entry.call, error));
 		return;

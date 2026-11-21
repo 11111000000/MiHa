@@ -176,13 +176,23 @@ Four fields plus two optional ones. The argument type is **our dialect**
 (ADR 0004 D20), not JSON Schema, and the dialect converts to the provider's JSON Schema
 on the way out.
 
-Two rules the contract carries:
+Three rules the contract carries:
 
 - **Arguments are validated by the core, before dispatch**, against the tool's dialect.
   A tool never parses its own arguments — that is how the fourth tool forgets.
+- **The tool receives the validated arguments, not the raw text.** The core has parsed
+  them, checked them and applied whatever the permission hook decided — including a
+  rewrite. A tool that re-parsed the text would run something the core never checked.
 - **A tool that fails is a result.** The tool may throw; the core converts the throw
   into a result with `isError`. A tool may also return `isError` directly, and in that
-  case `details` is kept for the interface, which a throw would discard.
+  case `details` is kept for the interface, which a throw discards.
+
+**The host does not run the tools. The driver does.** The host owns the tool's
+*policy* — the permission hook, which the dispatch has already applied — and the
+*capabilities* the tool may use. Letting the host invoke the tool is what let a hook's
+rewrite of the arguments be silently discarded: the host had the call with the original
+text and the plan with the new arguments, and it used the wrong one. A discriminator
+found it.
 
 ### D28. Dispatch: the core decides the grouping, the host executes it
 
