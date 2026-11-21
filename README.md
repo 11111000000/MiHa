@@ -40,24 +40,24 @@ The full comparison, with what it costs us, is in
 
 ## The architecture, in one document
 
-**[docs/target-architecture.md](docs/target-architecture.md)** — the target design,
-organised by four qualities of the harness itself: **effective · reliable · small ·
-frugal**. The five parts, the five budgets (bundle, result, turns, context, memory),
-the resident-memory law, and what is deliberately absent.
+**[docs/architecture.md](docs/architecture.md)** — the final architecture: the five
+parts, a run end to end, the laws, the five budgets, and what is deliberately absent.
 
-[docs/architecture.md](docs/architecture.md) — the same design in the shape it has
-today: what the thing is, how a run works, where the peer boundary lies.
+[docs/target-architecture.md](docs/target-architecture.md) — the derivation by four
+qualities of the harness itself: **effective · reliable · small · frugal**.
 
 ## Where things are
 
 | Path | What |
 |---|---|
 | `docs/plan.md` | **the route through the work**: what is built, in what order, how each piece is proved |
-| `docs/target-architecture.md` | **the target design**: four qualities, five parts, five budgets, one memory law |
+| `docs/architecture.md` | **the final architecture**: how everything works |
+| `docs/target-architecture.md` | the derivation: four qualities, five budgets, one memory law |
 | `docs/method.md` | **how this repository is developed**: the claim → code → proof → commit loop and the gate |
 | `docs/adr/0005-core-harness.md` | the core harness: the state machine, the tool contract, dispatch, the peer exchange |
 | `docs/adr/0006-alternatives.md` | the alternatives, and what we take from them |
 | `docs/adr/0007-peer-boundary.md` | a peer may be given a task, never a handle on our tools |
+| `docs/adr/0008-final-architecture.md` | the decision that fixed the final architecture |
 | `docs/adr/0004-quality-bar.md` | the quality bar and the budgets it is measured against |
 | `docs/adr/0003-core-scope.md` | how much of pi to take, and what "parity" means |
 | `docs/adr/0002-core-harness.md` | the architecture |

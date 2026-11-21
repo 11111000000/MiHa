@@ -168,7 +168,9 @@ the other end.
 ### 9. The trace and record/replay
 
 `src/trace/` — the run record, the cassette, the replay mode. The transcript itself is
-the trace: no second format.
+the trace: no second format ([ADR 0008](./adr/0008-final-architecture.md) D46);
+the cassette records only what the journal cannot — the provider's responses, keyed by
+request hash.
 
 Proven by: a recorded run replays to the same transcript; a diverging run is reported
 as a divergence with the first differing input.

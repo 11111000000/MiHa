@@ -65,6 +65,11 @@ half-understood. A frame we do not recognise is ignored.
 
 ### D43. A frame we do not know is ignored, and a task that is not ours is not ours
 
+With one event vocabulary, the receiving side is this ADR's protocol read from the other
+end plus `runAgent`: the same journal entries flow back as `event` frames, so a delegated
+task is a fact in a log, not a fact in a frame
+([ADR 0008](./0008-final-architecture.md) D49).
+
 Two filters, both in the delegating side:
 
 - A frame whose `taskId` is not ours is not ours.

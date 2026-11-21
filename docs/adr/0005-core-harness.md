@@ -84,6 +84,10 @@ back as `tool_result` inputs. It never decides anything.
 
 ### D25. The run is a small state machine
 
+Finalised in [ADR 0008](./0008-final-architecture.md) D48: the phase is derived from the
+journal's tail and the ephemeral state — never stored — so resume, fork and replay are
+properties of the log.
+
 Six states. The phase is data, not control flow, so a run can be inspected, serialised,
 or resumed.
 
@@ -147,6 +151,10 @@ a transcript; and an undo is an append, not a mutation.
 
 ### D27. The tool contract is small, and the parameters are our dialect
 
+Finalised in [ADR 0008](./0008-final-architecture.md) D47: the tool receives the call's
+identity (id, name) and the validated arguments — never the raw argument text, which is
+the journal's record of what the model sent.
+
 ```ts
 export interface ToolDefinition {
   readonly name: string;
@@ -176,7 +184,9 @@ Four fields plus two optional ones. The argument type is **our dialect**
 (ADR 0004 D20), not JSON Schema, and the dialect converts to the provider's JSON Schema
 on the way out.
 
-Three rules the contract carries:
+Three rules the contract carries — and the permission seam is not one of them: it moved
+out of the core's planner and into the driver, asynchronous, because a synchronous hook
+cannot ask a human ([ADR 0008](./0008-final-architecture.md) D44):
 
 - **Arguments are validated by the core, before dispatch**, against the tool's dialect.
   A tool never parses its own arguments — that is how the fourth tool forgets.

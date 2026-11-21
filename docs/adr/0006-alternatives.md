@@ -118,7 +118,9 @@ next structural step rather than a later one:
   context.
 - **The peer exchange stops being a second vocabulary.** The exchange can carry the
   same events the transcript does, so "the frontend handed the backend a task" becomes a
-  fact in the log rather than a fact in a frame.
+  fact in the log rather than a fact in a frame. Fixed as policy in
+  [ADR 0008](./0008-final-architecture.md) D45: the journal entry *is* the durable
+  event, and `AgentEvent` as a second vocabulary is retired.
 
 The cost is an event taxonomy, a projection registry, a sequence counter and versioning
 discipline — roughly 150–250 lines and about 1 KB gzip, inside the budget.

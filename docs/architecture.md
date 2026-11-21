@@ -1,132 +1,250 @@
-# MiHa — the architecture
+# MiHa — the final architecture
 
-One document: what the thing is, how a run works, what the model experiences, where the
-boundary with a peer lies, and what holds it together. The decisions live in
-`docs/adr/`; the route through the work is `docs/plan.md`; how it is developed is
-`docs/method.md`.
+This is the architecture. It supersedes the drafts that led here
+([target-architecture.md](./target-architecture.md) keeps the derivation by quality;
+the ADRs keep the decisions). Everything below is what gets built.
 
-## What it is
+It was formed by taking the working design apart once more and asking of every piece:
+**does this earn its bytes?** Six things did not survive that question. They are listed
+first, because what a design refuses is the honest part of it.
 
-A **small, embeddable harness for a decentralised agent**. An application embeds it, and
-the application gets an agent loop: the model decides, the harness dispatches the tools
-the application registered, and the application's own UI renders the events.
+---
 
-The agent may work in the browser or on a server — or both, talking to each other. The
-same code is both sides. That is the "decentralised" part: the harness does not care
-where the reasoning happens, and a task can be handed from one side to the other and
-come back.
+## 0. What the critical pass changed
 
-## The shape
+| # | Before | After | Why |
+|---|---|---|---|
+| 1 | **two permission seams** — a synchronous `beforeToolCall` in the core's planner, and the host's policy around it | **one seam, async, in the driver**: the host supplies `approve(call) → Promise<allow \| deny \| rewritten args>`, asked before each tool runs | a synchronous hook cannot ask a human — and Genium's whole interaction *is* ask-the-user. A denial becomes an ordinary tool result, so the model reads it and recovers |
+| 2 | **two vocabularies** — `AgentEvent` for the host, journal entries for the transcript | **one**: the journal entry *is* the durable event. Live streaming deltas are ephemeral and never persisted | the host, the trace, the session and the peer all read the same log; nobody translates |
+| 3 | a separate trace format planned for the `trace/` layer | **none** — the trace *is* the journal. The cassette records only what the journal cannot: the provider's responses | one artefact to store, ship and replay |
+| 4 | the tool received the whole call block, raw argument text included | the tool receives the call's **identity** (id, name) and the **validated arguments**; the raw text is the journal's business | a tool that can re-read the raw text can act on something the core never checked |
+| 5 | the peer protocol carried `call`/`answer` frames | already removed (ADR 0007) — a peer gets a **task**, never a handle | every protocol in the field refuses callable handles; the measured cost of acting on unseen decisions is real |
+| 6 | the `phase` was a field the core kept in step | **derived** from the journal's tail and the ephemeral state | resume, fork and replay then cost nothing, because there is no second state to reconstruct |
+
+Two things were examined and **kept**, for the record: the `report` progress callback
+(one parameter, part of the event vocabulary, used by long tools) and the `accept` frame
+(three lines; it lets the delegator tell *slow* from *refused* before any event arrives).
+
+---
+
+## 1. What it is, in one paragraph
+
+An application embeds MiHa and gets an agent loop. The model decides; the harness
+dispatches the tools the application registered; the application's own interface renders
+what happened. Everything that happens is one **journal** — an append-only log of durable
+events — and everything reads from it: the model's context (a fold), the trace (the log
+itself), the session (a prefix), and what a peer is handed (the same events). The core
+is a pure function over that journal; a driver performs what the core asks; the host
+owns everything privileged — the model, the policy, the storage, the screen, the
+capabilities. The agent runs in a page, in a worker, on a server, or on several at once,
+handing **tasks** across — never tools.
 
 ```
-   application thread                       worker realm
-┌────────────────────┐   capability   ┌────────────────────┐
-│  DOM, storage,     │◄─── bridge ───►│  the agent loop    │
-│  the interface     │                │  the tools         │
-│                    │                │  the provider      │
-│  the peer link ────┼── offer ──────►│                    │
-└────────────────────┘                └────────────────────┘
+      the host (the application)              the run
+┌────────────────────────────────┐   ┌────────────────────────────────┐
+│ the provider client            │◄──┤ the driver                     │
+│ the tools                      │◄──┤   asks approve() before tools │
+│ approve() — may ask a human    │   │   prepareRequest() in flight  │
+│ prepareRequest()               │   │   races the cancellation      │
+│ persist() — the journal store  │◄──┤   emits live deltas (ephemeral)│
+│ capabilities (DOM, storage)    │   ├────────────────────────────────┤
+│ the peer link ──── task ──────┼──►│ the core: step(state, input)   │
+│ the interface ◄─── the journal │   │   phase = f(journal tail)     │
+└────────────────────────────────┘   ├────────────────────────────────┤
+                                     │ the journal (durable, windowed)│
+                                     │ the projection (fold → context)│
+                                     └────────────────────────────────┘
 ```
 
-| Layer | Holds | Lines |
-|---|---|---|
-| `core/` | the message and event algebras, the tool contract and dispatch, the transcript, the state machine, the driver | 1 006 |
-| `schema/` | the tool-parameter dialect and its validator | 258 |
-| `llm/` | the SSE reader, the call-correlation tracker, the OpenAI-compatible adapter | 313 |
-| `exchange/` | the peer protocol | 151 |
-| `worker/` | the capability bridge and the host that owns the realm | 181 |
-| `trace/`, `ui/` | the run record, the component registry and the interface spec | not written yet |
+---
 
-**5 103 B gzip** for the core, **6 523 B** with the provider layer, against a **30 000 B**
-ceiling. Zero runtime dependencies.
+## 2. The five parts
 
-## How a run works
+### 2.1 The journal — the only durable state
 
-The core is a **pure transition function**:
+An append-only log of **durable events**. One log; nothing else is durable.
+
+| Entry | Means |
+|---|---|
+| `message` | a user, assistant or tool-result message entered the run |
+| `tool_call` | the model issued a call |
+| `tool_result` | the call was answered — always, exactly once |
+| `compaction` | a range collapsed into a summary; carries the first kept id |
+| `change` | an earlier entry's *model-facing* view replaced; history untouched |
+| `block` | a call was denied by policy; recorded so the model and the audit both see it |
+
+The core keeps a **window** of it; the host persists the whole as entries are appended.
+The window is what makes the memory law (R1) true: a thousand-turn run costs the same
+resident memory as a ten-turn run, for a fixed window.
+
+**Live deltas are not journal entries.** A text delta from the provider is ephemeral —
+it exists to render, and the assembled message is the entry. Nothing that can be
+recomputed from the log is stored twice.
+
+### 2.2 The projection — the model's context, folded
+
+A named fold `apply(state, entry) → state`, advanced **incrementally**, never re-run
+from scratch. The model context is the fold's output; the journal keeps the evidence.
+
+Compaction is not a feature of the core — it is a fold that collapses a range into one
+summary entry. The same fold answers the replay law:
+
+> **fold(replay(log)) ≡ fold(log)** — the same run, replayed, produces the same context.
+
+That law is the check the development style needs, and it is a pure-function test with
+no provider in it.
+
+### 2.3 The core — a pure transition function
 
 ```
 step(state, input) → {state, outputs}
 ```
 
-It performs no I/O. It emits **intents** — `provider_request`, `tool_plan`, `append` — and
-the driver performs them. Six phases:
+No I/O, no clock, no storage, no policy. Its inputs are the run's inputs (a prompt, a
+provider event, a tool result, a cancel). Its outputs are **intents** — *ask the
+provider*, *run these tools*, *append this entry* — plus the ephemeral deltas it passes
+through to the driver.
 
-```
-idle → requesting → streaming → dispatching → settling → finished
-```
+**The phase is derived, never stored**: `phase = f(journal tail, ephemeral)`. That is
+why resume (fold and continue), fork (take a prefix) and replay are properties of the
+log rather than features to build.
 
-The transcript is **append-only**; the model context is a **projection** of it. The
-driver runs the tools — not the host — so a tool always receives the arguments the
-dispatch validated, including any the permission hook rewrote.
+The core validates arguments against the dialect, plans the tool groups, and keeps the
+pairing. It does not decide whether a tool *may* run — that is the host's promise,
+delivered asynchronously.
 
-## What the model experiences
+### 2.4 The driver — performs the intents, decides nothing
 
-This is the part that decides whether the harness works in practice, and it is the part
-the evidence is sharpest about. The model is not a bystander to our architecture: it
-reads what we give it and it changes what it does.
+The only effectful part. For each intent:
 
-| What the model sees | The law that holds it | The evidence |
+- **provider request** → pass it through the host's `prepareRequest` (one optional
+  function: elide a stale result, switch the model for a turn, attach a deadline), then
+  perform it and feed the stream back as inputs.
+- **tool plan** → for each tool, **await `approve(call)`**. The host may ask a human; a
+  denial becomes a `block` entry and an ordinary error tool result; a rewrite replaces
+  the arguments. Then run the tool and feed the result back.
+- **append** → hand the entry to the host's `persist`, and advance the window.
+
+It races the cancellation throughout: an aborted signal ends the run at the next
+boundary with every in-flight call answered.
+
+### 2.5 The host surface — seven hooks, and nothing else
+
+| Hook | The host provides | May not |
 |---|---|---|
-| **A small tool set, each with one stated purpose** | the registry is constant for the whole run | 856 real tools had a "smell" in 97.1 % of cases and 56 % never stated their purpose (arXiv:2602.14878) |
-| **Sharp descriptions, not rich ones** | the tool's description is one sentence of purpose and the parameters that matter | augmenting descriptions bought +5.85 pp success but cost **+67.46 %** steps and regressed **16.67 %** of cases — removing examples never hurt |
-| **A prefix that does not move** | the tools array never changes during a run | *"Adding or removing tool definitions mid-conversation invalidates that cache, and the resulting miss can cost more tokens than the definitions you removed"* (MCP client best practices) |
-| **Arguments that are exactly what was asked for** | the core validates against our dialect and the tool receives the validated arguments | models send `"42"` for a number; a subset validator that does not coerce rejects it |
-| **Errors that say where** | the dialect reports an RFC 6901 JSON Pointer to the offending node | a model can only fix an argument it can locate |
-| **Exactly one answer per call** | law M1 | a missing answer makes the provider reject the next request |
-| **Results that are bounded, and say when they were cut** | the core truncates and marks it, keeping the beginning and the end | unbounded results cost ≈3 350·N² cumulative tokens; the schemas amortise, the results compound |
-| **An end that is reported** | the outcome distinguishes completed, cancelled, failed and limit-reached | real tasks take 16.2 turns and 17.4 tool calls (arXiv:2509.24002); a silent stop is indistinguishable from a finished one |
+| `callProvider` | the model, the transport | see the core's state |
+| `tools` | pure functions over validated arguments | widen a schema, re-parse arguments |
+| `approve` | the policy — may ask a human | run a tool the core did not plan |
+| `prepareRequest` | in-flight request rewriting | reorder the journal |
+| `persist` | where entries live | edit an entry |
+| capabilities | what a worker may reach: the DOM, storage | grant past the realm's end |
+| the peer link | a task, in either direction | call the other side's tools |
 
-Together these are what "the model feels confident" means concretely: **the model never
-meets an ambiguous state.** Every call is answered exactly once, every error locates
-itself, every truncation announces itself, and the prefix it sees does not move under
-it.
+**A peer gets a task, never a capability.** The receiving side is `delegate()` read
+from the other end plus `runAgent`: accept or refuse, run one's own agent on the task
+with one's own tools, send one's events back — they are the same journal entries — and
+end with a result.
 
-## The boundary with a peer
+---
 
-A peer may be **offered a task**, and may offer one back. A peer may **not** call the
-other side's tools — that is a callable handle into a decision the peer cannot see, and
-every protocol in the field refuses to send one (ADR 0007). The delegating side's tools
-and reasoning stay private.
+## 3. A run, end to end
 
 ```
-offer(task, context) → event* → result
+ 1  the application calls runAgent(prompt)
+ 2  the core appends a `message` entry        → the host persists it
+ 3  the core emits a provider request         → prepareRequest → the provider
+ 4  the provider streams deltas               → ephemeral; the interface renders
+ 5  the stream ends                          → the core appends the `message` entry
+ 6  the core plans the tool groups           → an intent, not an action
+ 7  the driver asks approve(call)            → the host may ask a human
+       denied  → a `block` entry + an error result; the model reads it
+       allowed → the tool runs with the validated arguments
+ 8  results arrive in completion order       → the core records them in assistant order
+ 9  back to 3, until no calls and no queue  → or the turn limit, which is named
+10  the outcome: completed | cancelled | failed | limit-reached
 ```
 
-The offer carries the task, the context and the protocol version — nothing about the
-delegator's tools. A frame for another task is not ours; a frame we do not know is
-ignored.
+At every step, the model's world is legible: a constant tool list, exactly one answer
+per call, errors that point at the argument, results that say when they were cut, and a
+prefix that never moves.
 
-## What holds it together
+---
 
-Nineteen claims, each with a machine that decides and a control that proves the machine
-can fail. Twelve of them are the laws of the code, and every law names the fact it
-derives from (ADR 0004 D22). The rest are the budgets, the document graph and the gate
-itself.
+## 4. The laws
 
-```
-bun run check     # budget, documents, types, tests, evidence
-mathc next        # what the map says is next
-```
+Derived from protocol facts, each with its witness where it depends on the driver.
 
-## What is deliberately not here
+| Law | Statement | Derivation |
+|---|---|---|
+| **M1** | every call receives exactly one result — on denial, failure, truncation, provider error, cancellation | the provider rejects the next request whose call has no answer |
+| **M2** | a call with incomplete arguments is never executed | the output limit truncates the argument stream mid-JSON |
+| **M3** | a failed tool is a result carrying `isError` | the model must be able to read the failure and recover |
+| **M4** | a provider failure is an event; M1 survives it | a request can fail at any point |
+| **R1** | resident memory is O(window + context + one result), independent of run length | the windowed journal, the incremental fold, the bounded result |
+| **T1** | an exclusive tool runs alone; shared tools around it still run together | "exclusive" means not interleaved with another exclusive tool |
+| **T4** | results are recorded in assistant order | the transcript must replay |
+| **replay** | fold(replay(log)) ≡ fold(log) | the context is a fold of the log |
+| **S1–S7** | the stream's laws | the stream is the only live channel |
+| **C1–C3** | the dialect's laws | the admission set is written down, not the implementation |
 
-| Not here | Why |
+---
+
+## 5. The five budgets
+
+**The host sets the policy; the core enforces the law.**
+
+| Budget | Limit | Set by | Enforced by |
+|---|---|---|---|
+| bundle | 30 000 B gzip, browser, minified | us | the build fails |
+| result | bytes per tool result | the host | the core truncates and announces |
+| turns | per run | the host | the outcome says `limitReached` |
+| context | tokens per projection | the host | the fold's accounting |
+| memory | the resident window | the host | R1 |
+
+---
+
+## 6. The modules
+
+| Layer | Holds | Lines now | Projected |
+|---|---|---|---|
+| `core/` | the journal, the projection, the state machine, the driver, the tool contract | 1 006 | ~1 300 |
+| `schema/` | the tool-parameter dialect | 258 | 258 |
+| `llm/` | the SSE reader, the call tracker, one adapter | 313 | ~450 |
+| `exchange/` | the peer protocol, both directions | 151 | ~350 |
+| `worker/` | the capability bridge, the realm host | 181 | ~250 |
+| `trace/` | the cassette — the provider responses only | — | ~150 |
+| `ui/` | the registry, the interface spec, the patches | — | ~800 |
+| | | **1 909** | **≈3 350** |
+
+**Bundle: 5 103 B gzip now, ≈12–14 KB projected.** Zero runtime dependencies.
+Resident memory O(window + context + one result), by law.
+
+---
+
+## 7. What is deliberately absent
+
+| Absent | Why |
 |---|---|
-| a provider catalogue | the host owns the model; the core has no notion of one |
-| a permission engine | the host owns the policy; the core offers one hook |
-| session storage | the host owns it; the core appends entries by intent |
-| progressive tool disclosure | the preregistered test found the hypothesis did not survive, and a moving tool array breaks the prompt cache |
-| programmatic tool calling | a code tool over page-local actions turns a declared tool list into arbitrary script in the user's page |
+| a model catalogue | the host owns the model |
+| a permission engine | the host owns the policy; the core carries one async hook to it |
+| a session store | the host owns it; the core appends by intent |
+| progressive tool disclosure | the preregistered test found the hypothesis did not survive; a moving tool list breaks the prompt cache |
+| programmatic tool calling | a code tool over page-local actions is arbitrary script in the user's page |
 | a graph runtime | the laws are checked by substitution on a pure function |
+| telemetry | a journal that replays is worth more than a metric that aggregates |
+| callable peer handles | a peer acts on decisions it cannot see; the cost is measured |
 
-## What is still missing
+---
 
-- The **receiving side** of the exchange.
-- The **durable event log with fold projections** (ADR 0006 D39) — the next structural
-  step, because it subsumes compaction and lets the trace and the exchange share one
-  vocabulary.
-- The **trace and record/replay**, which the development style needs to compare repeated
-  runs.
-- The **interface layer**, if the agent is to draw interfaces.
-- A run **in a real browser**, against a **real provider**, over a **real socket**. Every
-  measurement so far is on Bun and Node.
+## 8. What remains to build, in order
+
+1. **The journal as durable events** — the entry union, the window, the envelope. R1
+   depends on it; so does everything below.
+2. **The projection** — the incremental fold, the replay law's test.
+3. **The async `approve` seam** — replacing the core's synchronous hook; the
+   human-in-the-loop gap closes here.
+4. **The result budget and `prepareRequest`** — both small, both on the driver.
+5. **The receiving side of the exchange** — `delegate()` from the other end.
+6. **The cassette** — the provider responses, keyed by request hash; replay mode.
+7. **The interface layer** — if the agent is to draw interfaces.
+8. **A run in a real browser, against a real provider, over a real socket.**
