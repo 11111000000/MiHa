@@ -50,9 +50,9 @@ In place now: the message and event algebras, the event stream with its five law
 own tool-parameter schema dialect, the tool contract and dispatch plan, the append-only
 transcript, the six-state machine, the driver and the provider layer — an agent runs end
 to end against a scripted or OpenAI-compatible provider, plus the capability bridge
-that lets a worker ask the host for the DOM and the storage: 89 tests, 5 096 B gzip for
-the core and 6 516 B with the provider layer, against a 30 000 B ceiling. Zero runtime
-dependencies.
+and the host that lets a worker ask the application for the DOM and the storage, plus
+the delegating side of the peer exchange: 107 tests, 5 096 B gzip for the core and
+6 516 B with the provider layer, against a 30 000 B ceiling. Zero runtime dependencies.
 
 Every claim has been through a **discriminator** — an agent whose job is to break the
 work rather than confirm it. The first pass found four defects that every proven

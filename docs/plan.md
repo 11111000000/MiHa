@@ -140,13 +140,21 @@ That last point is the one to keep: a proven control says the verifier is sensit
 settled only after a discriminator has tried to break it — see
 [docs/discriminator.md](./discriminator.md).
 
-### 8. The peer exchange
+### 8. The peer exchange — **the delegating side is done**
 
-`src/exchange/` — the frames, the transport, the reconnection.
+`src/exchange/` — the frames, the delegating side and the event queue. The frontend
+offers a task; the backend's events arrive in order; a call the backend makes runs
+through the frontend's own dispatch, so the arguments are validated against the tool's
+dialect and the frontend's permission hook applies to it.
 
-Proven by: the exchange conformance suite, run against both sides — a task offered
-from the frontend and answered by the backend, and the same in the other direction,
-including a peer-initiated tool call answered by the delegator.
+Proven by: the claim `exchange-delegate-laws` — the offer is sent once, the events
+arrive in order, an unregistered tool is answered with a failure rather than a crash,
+the permission hook applies, a refusal becomes a failure carrying the reason, and a
+frame for another task is not ours.
+
+Still to do: the **receiving side** — the side that accepts a task, runs its own agent
+on it, and calls back. The protocol is symmetric, so that side is this code read from
+the other end.
 
 ### 9. The trace and record/replay
 

@@ -243,6 +243,11 @@ transcript the model has already seen.
 
 ### D30. The exchange with a peer is symmetric, and a peer may call back
 
+> **Status: half built.** The delegating side is done — the side that offers a task and
+> hosts the tools the peer may call back. The receiving side — the side that accepts a
+> task, runs its own agent on it, and calls back — is the next slice. The protocol is
+> already symmetric, so the receiving side is the same code read from the other end.
+
 The peer protocol is ours, and both sides are MiHa.
 
 | Frame | Direction | Meaning |
@@ -297,8 +302,8 @@ the run.
 | `core/json.ts` | — | **10** | parsing that cannot throw |
 | `schema/` | 260 | **258** | the dialect and its validator |
 | `llm/` | 600 | **306** | the SSE reader, the call tracker, the OpenAI-compatible adapter |
-| `exchange/` | 700 | — | the peer protocol and the transports |
-| `worker/` | 500 | **114** | the capability bridge. The host that owns the worker is still to come |
+| `exchange/` | 700 | **234** | the peer protocol, the delegating side and the event queue. The receiving side is still to come |
+| `worker/` | 500 | **175** | the capability bridge and the host that owns the worker |
 | `trace/` | 250 | — | the run record and record/replay — the transcript itself is the trace |
 | `ui/` | 800 | — | the registry, the spec, the patches |
 
