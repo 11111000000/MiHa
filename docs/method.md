@@ -46,6 +46,29 @@ controls in this repository were declared against code that had not been written
 and both had to be corrected. The rule is simply to run the control once against the
 subject before the claim is declared.
 
+**Write the test first, then declare the claim over it.** This is the order that makes
+the method able to *catch* anything.
+
+The method verifies a claim by running its verifier over a subject that must exist. If
+the claim is declared before anything exists, the subject is not whole, the verifier
+never runs, and the claim comes back *inconclusive* — which is not a refutation, and
+which the measurer does not count as a caught defect. That is exactly what happened
+here: the first three claims were declared before their test file existed, and the
+measurer still reports no caught defect.
+
+The order that works:
+
+1. **Write the test.** It fails, because the thing it tests does not exist yet.
+2. **Declare the claim** with the test file in the subject. The subject now exists, so
+   the verifier runs — and fails. The claim is **refuted**, and the refutation is
+   recorded.
+3. **Implement** until the verifier passes.
+4. **Run.** The claim holds, and the trail shows a claim that was refuted and then
+   fixed.
+
+A claim that was refuted is what the measurer counts as a caught defect, and it is the
+first thing that makes its usefulness criterion computable.
+
 **The subject must include the verifier.** A claim about `src/core/tools.ts` that does
 not name `test/tools.test.ts` leaves the test outside the coverage map, and a change to
 the test then invalidates nothing.
