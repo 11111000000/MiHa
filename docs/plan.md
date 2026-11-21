@@ -103,14 +103,33 @@ The second lesson: the architectural decision named a `protocol/` layer that the
 never had. Nothing caught it until a check compared the decision with the tree. It does
 now.
 
-### 7. The worker host and the capability bridge
+### 7. The worker host and the capability bridge — **the bridge is done**
 
-`src/worker/` — the core in a worker, the main thread as host for DOM and storage, the
-bridge as a closed set of capabilities.
+`src/worker/bridge.ts` — 114 code lines. The capability bridge: the worker asks the
+host for the things a worker cannot have — the DOM, the storage, the clipboard — and the
+host answers.
 
-Proven by: the bridge refuses a capability that was not registered; `worker.terminate`
-ends a run that cannot be ended politely; the main thread stays responsive during a
-run.
+Proven by: five claims — `bridge-closed`, `bridge-failures-are-values`,
+`bridge-answers-the-caller`, `bridge-carrying-failures-are-values` and
+`bridge-answers-once` — covering a capability that was not registered, one that throws,
+one that rejects, two concurrent calls, a value the channel cannot carry in either
+direction, and a call answered twice.
+
+Still to do: the host that *owns* the worker — spawning it, forwarding the events to the
+interface, and terminating it. That is the next slice.
+
+**What this slice cost.** Three things the method caught that a test alone would not
+have:
+
+- The implementation let a broken channel raise out of the host, which in the
+  application's thread is an unhandled rejection. The claim was refuted, the hole was
+  closed, and the trail shows it.
+- Two of the three controls named lines the code did not have, and the method reported
+  them as *inconclusive* rather than as proofs.
+- One control disabled the sending of the frame altogether, so every call hung and the
+  verifier took a minute instead of a millisecond. A control that breaks the law by
+  hanging is a bad control: it costs the whole run and says less than one that fails
+  fast.
 
 ### 8. The peer exchange
 

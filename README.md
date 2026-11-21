@@ -49,9 +49,10 @@ symmetric protocol that carries peer-initiated tool calls.
 In place now: the message and event algebras, the event stream with its five laws, our
 own tool-parameter schema dialect, the tool contract and dispatch plan, the append-only
 transcript, the six-state machine, the driver and the provider layer — an agent runs end
-to end against a scripted or OpenAI-compatible provider: 67 tests, 4 828 B gzip for the
-core and 6 239 B with the provider layer, against a 30 000 B ceiling. Zero runtime
-dependencies.
+to end against a scripted or OpenAI-compatible provider, plus the capability bridge
+that lets a worker ask the host for the DOM and the storage: 79 tests, 4 828 B gzip
+for the core and 6 239 B with the provider layer, against a 30 000 B ceiling. Zero
+runtime dependencies.
 
 The core is designed as a **pure transition function**: it performs no I/O and emits
 intents, the driver performs them, and the laws are properties of that function. The run

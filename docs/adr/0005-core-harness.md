@@ -298,7 +298,7 @@ the run.
 | `schema/` | 260 | **258** | the dialect and its validator |
 | `llm/` | 600 | **306** | the SSE reader, the call tracker, the OpenAI-compatible adapter |
 | `exchange/` | 700 | — | the peer protocol and the transports |
-| `worker/` | 500 | — | the worker host and the capability bridge |
+| `worker/` | 500 | **114** | the capability bridge. The host that owns the worker is still to come |
 | `trace/` | 250 | — | the run record and record/replay — the transcript itself is the trace |
 | `ui/` | 800 | — | the registry, the spec, the patches |
 

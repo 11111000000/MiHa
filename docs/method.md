@@ -162,6 +162,12 @@ protocol seconds: 3.9, price-arm seconds: 0.8, overhead: 3.1
 criterion: not computable - no defect was caught
 ```
 
+**Run the measurer while a claim is refuted.** The measurer counts the claims that are
+*currently* refuted — the open defects the method is holding visible. Run after the
+defect is fixed, there is nothing to count, and the criterion is not computable. The
+moment to measure is the moment the method has caught something and the fix has not
+landed yet.
+
 Two readings, both worth keeping:
 
 - **The overhead is 3.1 seconds of machine time.** The protocol runs every verifier

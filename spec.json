@@ -261,12 +261,12 @@
         "kind": "madr",
         "path": "docs/adr/0005-core-harness.md",
         "section": null,
-        "digest": "ae9323c7d8c46233598f46005ec25b873999b8008e5abfdf593dac6937e17209",
+        "digest": "0aba0b7fb4880ba6808e92c1f677a4ec42497e5200c1e9f246fec7ac3d47f9d2",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner re-read the decision: the layer diagram was corrected to the tree it now describes, the bundle budget names what it covers, and the module table gained its measured column. No decision changed -- the corrections make the record match the code, and the layer agreement is now machine-checked",
-          "at": 1795242313,
-          "previous_digest": "e37aa642e0b8aec2b31917d0409d4213fd84424ecbfb1e43b12e9911d485110e"
+          "reason": "Owner re-read the decision: the module table gained its measured column for the worker layer. No decision changed",
+          "at": 1795250083,
+          "previous_digest": "ae9323c7d8c46233598f46005ec25b873999b8008e5abfdf593dac6937e17209"
         }
       },
       "kind": "acceptance",
@@ -289,12 +289,12 @@
         "kind": "madr",
         "path": "docs/adr/0005-core-harness.md",
         "section": null,
-        "digest": "ae9323c7d8c46233598f46005ec25b873999b8008e5abfdf593dac6937e17209",
+        "digest": "0aba0b7fb4880ba6808e92c1f677a4ec42497e5200c1e9f246fec7ac3d47f9d2",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner re-read the decision: the layer diagram was corrected to the tree it now describes, the bundle budget names what it covers, and the module table gained its measured column. No decision changed -- the corrections make the record match the code, and the layer agreement is now machine-checked",
-          "at": 1795242313,
-          "previous_digest": "e37aa642e0b8aec2b31917d0409d4213fd84424ecbfb1e43b12e9911d485110e"
+          "reason": "Owner re-read the decision: the module table gained its measured column for the worker layer. No decision changed",
+          "at": 1795250083,
+          "previous_digest": "ae9323c7d8c46233598f46005ec25b873999b8008e5abfdf593dac6937e17209"
         }
       },
       "kind": "acceptance",
@@ -327,6 +327,91 @@
       "falsifier": "The decision names a layer the tree does not have, the tree has a layer the decision does not name, or a layer has no budget",
       "register": "fact",
       "control": "sed -i 's|^core/        the message|core\\/        the message\\nmisc\\/        a layer nobody budgeted|' docs/adr/0002-core-harness.md",
+      "waiver": null
+    },
+    {
+      "id": "bridge-closed",
+      "text": "The capability bridge is a closed set: only the capabilities the host registered are reachable, an unknown capability is refused by name, and the caller's promise is told so",
+      "scope": [ "src/worker/", "test/worker.test.ts" ],
+      "source": null,
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        { "kind": "verifier", "spec": "bun test test/worker.test.ts" }
+      ],
+      "falsifier": "A capability the host did not register can be called, or the caller is not told which capability was refused",
+      "register": "fact",
+      "control": "sed -i 's/const capability = capabilities\\[frame.capability\\];/const capability = capabilities[frame.capability] ?? (async () => \"anything goes\");/' src/worker/bridge.ts",
+      "waiver": null
+    },
+    {
+      "id": "bridge-failures-are-values",
+      "text": "A capability that fails rejects the caller with the failure's own message, whether it failed by throwing or by rejecting, and the failure does not escape as an unhandled rejection",
+      "scope": [ "src/worker/", "test/worker.test.ts" ],
+      "source": null,
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        { "kind": "verifier", "spec": "bun test test/worker.test.ts" }
+      ],
+      "falsifier": "A failing capability resolves instead of rejecting, or the caller is told something other than what failed",
+      "register": "fact",
+      "control": "sed -i 's/error: messageOf(error)/error: \"the capability failed\"/' src/worker/bridge.ts",
+      "waiver": null
+    },
+    {
+      "id": "bridge-answers-the-caller",
+      "text": "Every capability call is answered exactly once, and the answer reaches the caller that asked: two concurrent calls never receive each other's answers",
+      "scope": [ "src/worker/", "test/worker.test.ts" ],
+      "source": null,
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        { "kind": "verifier", "spec": "bun test test/worker.test.ts" }
+      ],
+      "falsifier": "An answer reaches the wrong caller, an answer is delivered twice, or a call is never answered",
+      "register": "fact",
+      "control": "sed -i 's/const pending = byId.get(frame.id);/const pending = byId.values().next().value;/' src/worker/bridge.ts",
+      "waiver": null
+    },
+    {
+      "id": "bridge-carrying-failures-are-values",
+      "text": "A value the channel cannot carry fails the call with an error, in both directions: arguments that cannot be sent, and a result that cannot be sent. The caller is never left waiting for an answer that cannot arrive",
+      "scope": [ "src/worker/", "test/worker.test.ts" ],
+      "source": null,
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        { "kind": "verifier", "spec": "bun test test/worker.test.ts" }
+      ],
+      "falsifier": "An argument or a result that the channel refuses leaves the caller waiting, or the failure is reported as something other than a carrying failure",
+      "register": "fact",
+      "control": "sed -i 's/\"the arguments cannot be sent\"/\"the call failed\"/' src/worker/bridge.ts",
+      "waiver": null
+    },
+    {
+      "id": "bridge-answers-once",
+      "text": "Every capability call is answered exactly once: a call that succeeded, one that failed and one that was refused each produce a single answer, and a call that was never made produces none",
+      "scope": [ "src/worker/", "test/worker.test.ts" ],
+      "source": null,
+      "kind": "acceptance",
+      "phase": "pre-merge",
+      "owner": "petr p.b.kosov@yandex.ru",
+      "review_on": [],
+      "requirements": [
+        { "kind": "verifier", "spec": "bun test test/worker.test.ts" }
+      ],
+      "falsifier": "A call receives two answers, or a call receives none",
+      "register": "fact",
+      "control": "sed -i 's/if (tryPost(port, frame)) return;/if (tryPost(port, frame)) { port.post(frame); return; }/' src/worker/bridge.ts",
       "waiver": null
     }
   ]
