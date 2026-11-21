@@ -2,7 +2,13 @@
   "schema_version": 5,
   "goal": {
     "text": "MiHa is a reference-grade browser agent harness: its budget, its laws and its document graph are all machine-checked, and every claim below is proven with a negative control",
-    "scope": [ "docs/", "scripts/", "src/", "test/", "package.json" ],
+    "scope": [
+      "docs/",
+      "scripts/",
+      "src/",
+      "test/",
+      "package.json"
+    ],
     "by": "petr p.b.kosov@yandex.ru",
     "at": 1795174241,
     "reason": "The aim now covers the implementation and its budgets, not only the decision record"
@@ -11,7 +17,11 @@
     {
       "id": "docs-links-resolve",
       "text": "Every relative document link and every ADR supersedes target in the decision record resolves to a file that exists, and the supersedes chain terminates without looping",
-      "scope": [ "docs/", "scripts/check-docs.mjs", "README.md" ],
+      "scope": [
+        "docs/",
+        "scripts/check-docs.mjs",
+        "README.md"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
@@ -29,7 +39,10 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun scripts/check-docs.mjs links" }
+        {
+          "kind": "verifier",
+          "spec": "bun scripts/check-docs.mjs links"
+        }
       ],
       "falsifier": "A document links to a file that does not exist, or an ADR names a missing or looping supersedes target",
       "register": "fact",
@@ -39,7 +52,10 @@
     {
       "id": "decisions-well-formed",
       "text": "Every decision label referenced anywhere in the documentation is defined by an ADR heading, each ADR's labels are contiguous from D1, and no ADR defines decisions that nothing else references",
-      "scope": [ "docs/adr/", "scripts/check-docs.mjs" ],
+      "scope": [
+        "docs/adr/",
+        "scripts/check-docs.mjs"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
@@ -70,7 +86,10 @@
     {
       "id": "measurements-attributed",
       "text": "Every measurement stated in the research documents carries a source: either a file and line, a URL, or a caption directly above the table that declares where the numbers come from",
-      "scope": [ "docs/research/", "scripts/check-docs.mjs" ],
+      "scope": [
+        "docs/research/",
+        "scripts/check-docs.mjs"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0002-core-harness.md",
@@ -101,7 +120,11 @@
     {
       "id": "budgets-enforced",
       "text": "The published browser bundle, the per-layer code-line budgets, the runtime dependency count and the absence of any in the source all hold within the limits declared in ADR 0004",
-      "scope": [ "src/", "scripts/check-budget.mjs", "package.json" ],
+      "scope": [
+        "src/",
+        "scripts/check-budget.mjs",
+        "package.json"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
@@ -119,7 +142,10 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun scripts/check-budget.mjs" }
+        {
+          "kind": "verifier",
+          "spec": "bun scripts/check-budget.mjs"
+        }
       ],
       "falsifier": "The browser bundle exceeds 30 000 B gzip, a layer exceeds its line budget, a runtime dependency is declared, or any appears in src/",
       "register": "fact",
@@ -129,7 +155,10 @@
     {
       "id": "stream-laws",
       "text": "The event stream satisfies laws S1 to S7 as written in ADR 0004 D22: events arrive in push order exactly once, result resolves once with the terminal value, late events are ignored, iteration ends after the terminal event, nothing is lost between a push and the start of iteration, a failure ends iteration by throwing and rejects result, and a close without a terminal event rejects result and ends iteration",
-      "scope": [ "src/core/event-stream.ts", "test/event-stream.test.ts" ],
+      "scope": [
+        "src/core/event-stream.ts",
+        "test/event-stream.test.ts"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
@@ -147,7 +176,10 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/event-stream.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/event-stream.test.ts"
+        }
       ],
       "falsifier": "A law is broken: order or count of delivered events changes, result resolves with the wrong value or more than once, a late event is delivered, or an event pushed before iteration is lost",
       "register": "fact",
@@ -157,7 +189,10 @@
     {
       "id": "dialect-laws",
       "text": "The tool-parameter dialect satisfies laws C1 to C3 as written in ADR 0004 D22: every value the dialect admits is accepted, every value it does not admit is rejected with an RFC 6901 JSON Pointer path, and coercion happens only where the dialect says so. The admission set is the table in the decision, not the implementation",
-      "scope": [ "src/schema/dialect.ts", "test/dialect.test.ts" ],
+      "scope": [
+        "src/schema/dialect.ts",
+        "test/dialect.test.ts"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
@@ -175,7 +210,10 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/dialect.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/dialect.test.ts"
+        }
       ],
       "falsifier": "A value the dialect admits is rejected, a rejected value carries no path, or a value is coerced where the dialect did not ask for coercion",
       "register": "fact",
@@ -186,7 +224,9 @@
       "id": "tools-laws",
       "text": "The dispatch planner satisfies laws M1, M2 and M3 and policy T1: every call of a batch appears exactly once across the plan and the rejections, a call whose arguments did not arrive complete is never planned for execution, a failed tool is a result carrying isError rather than ordinary content, and an exclusive tool runs alone while shared tools around it still share a group",
       "scope": [
-        "src/core/tools.ts", "src/core/json.ts", "src/core/permissions.ts",
+        "src/core/tools.ts",
+        "src/core/json.ts",
+        "src/core/permissions.ts",
         "test/tools.test.ts"
       ],
       "source": {
@@ -201,7 +241,10 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/tools.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/tools.test.ts"
+        }
       ],
       "falsifier": "A call is planned and rejected at once or neither, a call with unparseable arguments reaches a group, a failure is reported as ordinary content, or an exclusive tool shares a group with another exclusive tool",
       "register": "fact",
@@ -212,7 +255,9 @@
       "id": "run-laws",
       "text": "The state machine and the driver keep laws M1 to M4 and T4 over a whole run: every tool call of every batch receives exactly one result -- including on rejection, tool failure, truncation, provider error and cancellation -- the results are recorded in assistant order, a failed tool is a result carrying isError, a provider failure is an event that leaves every streamed call answered, and an aborted signal ends the run at the next boundary with every in-flight call answered",
       "scope": [
-        "src/core/run.ts", "src/core/loop.ts", "src/core/transcript.ts",
+        "src/core/run.ts",
+        "src/core/loop.ts",
+        "src/core/transcript.ts",
         "test/e2e.test.ts"
       ],
       "source": {
@@ -227,7 +272,10 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/e2e.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/e2e.test.ts"
+        }
       ],
       "falsifier": "A call is left unanswered on any path, a call with unparseable arguments reaches a group, a failure becomes ordinary content or a thrown error, or the results are recorded in completion order",
       "register": "fact",
@@ -238,7 +286,10 @@
       "id": "gate-checks-pass",
       "text": "The commit gate runs every check that needs only bun — the budget, the documents and the tests — and all of them pass",
       "scope": [
-        "scripts/checks.sh", "scripts/gate.sh", "scripts/types.sh", "src/",
+        "scripts/checks.sh",
+        "scripts/gate.sh",
+        "scripts/types.sh",
+        "src/",
         "test/"
       ],
       "source": null,
@@ -247,7 +298,10 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "sh scripts/checks.sh" }
+        {
+          "kind": "verifier",
+          "spec": "sh scripts/checks.sh"
+        }
       ],
       "falsifier": "One of the checks is not run by the gate, or one of them fails. The type check is deliberately not claimed: the isolated evidence copy is a git clone with no node_modules, so a control there would fail for a reason unrelated to its subject, and the method counts an infrastructure failure as no refutation at all",
       "register": "fact",
@@ -257,17 +311,20 @@
     {
       "id": "provider-never-throws",
       "text": "The provider adapter never throws and never rejects: a network failure, a refusal, a malformed chunk, a tool call without a stream index, any exception raised while reading the provider's body, and a stream that ends without a terminal event all arrive at the core as an error event, so the core's pairing invariant survives a broken provider",
-      "scope": [ "src/llm/", "test/llm.test.ts" ],
+      "scope": [
+        "src/llm/",
+        "test/llm.test.ts"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0005-core-harness.md",
         "section": null,
-        "digest": "14f240677da993200900317d593525123473cf263075089654f63b7ae106de6f",
+        "digest": "cd97e48eda05c6ea2f23cd67ca13abe8389b6fdbc60ed22ebf9591cecdbe06a1",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner re-read the decision: the tool contract gained a result budget and the peer offer carries the delegator's tool descriptions. No decision changed",
-          "at": 1795271685,
-          "previous_digest": "b754f3deb3120b3f658a7f3805d55b30b1140550c81f6174d8918deace4a8316"
+          "reason": "Owner re-read the decision: the peer may no longer call the delegator's tools, so the offer carries the task, the context and the protocol version, and a peer's call frame is ignored",
+          "at": 1795274989,
+          "previous_digest": "14f240677da993200900317d593525123473cf263075089654f63b7ae106de6f"
         }
       },
       "kind": "acceptance",
@@ -275,7 +332,10 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/llm.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/llm.test.ts"
+        }
       ],
       "falsifier": "The adapter raises, or a stream that ends without a terminal event leaves the core waiting instead of receiving an error",
       "register": "fact",
@@ -285,17 +345,20 @@
     {
       "id": "provider-arguments-intact",
       "text": "Every fragment of a tool call's arguments reaches the core in order and attached to the right call: parallel calls are correlated by their stream index, the arguments of each call concatenate to exactly what the provider sent, a call whose id arrives late still starts once and carries every fragment, and a call without a stream index is refused rather than merged into another call",
-      "scope": [ "src/llm/tool-calls.ts", "test/llm.test.ts" ],
+      "scope": [
+        "src/llm/tool-calls.ts",
+        "test/llm.test.ts"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0005-core-harness.md",
         "section": null,
-        "digest": "14f240677da993200900317d593525123473cf263075089654f63b7ae106de6f",
+        "digest": "cd97e48eda05c6ea2f23cd67ca13abe8389b6fdbc60ed22ebf9591cecdbe06a1",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner re-read the decision: the tool contract gained a result budget and the peer offer carries the delegator's tool descriptions. No decision changed",
-          "at": 1795271685,
-          "previous_digest": "b754f3deb3120b3f658a7f3805d55b30b1140550c81f6174d8918deace4a8316"
+          "reason": "Owner re-read the decision: the peer may no longer call the delegator's tools, so the offer carries the task, the context and the protocol version, and a peer's call frame is ignored",
+          "at": 1795274989,
+          "previous_digest": "14f240677da993200900317d593525123473cf263075089654f63b7ae106de6f"
         }
       },
       "kind": "acceptance",
@@ -303,7 +366,10 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/llm.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/llm.test.ts"
+        }
       ],
       "falsifier": "A fragment is lost, reordered, attached to the wrong call, or a call starts twice",
       "register": "fact",
@@ -314,8 +380,10 @@
       "id": "layers-agree",
       "text": "The layers named in the architectural decision are exactly the layers the source tree has, and every one of them has a declared budget",
       "scope": [
-        "docs/adr/0002-core-harness.md", "scripts/layers.mjs",
-        "scripts/check-docs.mjs", "scripts/check-budget.mjs"
+        "docs/adr/0002-core-harness.md",
+        "scripts/layers.mjs",
+        "scripts/check-docs.mjs",
+        "scripts/check-budget.mjs"
       ],
       "source": null,
       "kind": "acceptance",
@@ -323,7 +391,10 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun scripts/check-docs.mjs layers" }
+        {
+          "kind": "verifier",
+          "spec": "bun scripts/check-docs.mjs layers"
+        }
       ],
       "falsifier": "The decision names a layer the tree does not have, the tree has a layer the decision does not name, or a layer has no budget",
       "register": "fact",
@@ -333,14 +404,20 @@
     {
       "id": "bridge-closed",
       "text": "The capability bridge is a closed set: only a capability that is an **own** entry of the host's table is reachable, a name inherited from Object.prototype is not registered and is refused by name, and the caller is told which capability was refused",
-      "scope": [ "src/worker/", "test/worker.test.ts" ],
+      "scope": [
+        "src/worker/",
+        "test/worker.test.ts"
+      ],
       "source": null,
       "kind": "acceptance",
       "phase": "pre-merge",
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/worker.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/worker.test.ts"
+        }
       ],
       "falsifier": "A capability the host did not register can be called, or the caller is not told which capability was refused",
       "register": "fact",
@@ -350,14 +427,20 @@
     {
       "id": "bridge-failures-are-values",
       "text": "A capability that fails rejects the caller with an Error whose message is **exactly** the failure's message: error.message for an Error, String(value) otherwise, and a capability failure and a carrying failure stay distinguishable from each other",
-      "scope": [ "src/worker/", "test/worker.test.ts" ],
+      "scope": [
+        "src/worker/",
+        "test/worker.test.ts"
+      ],
       "source": null,
       "kind": "acceptance",
       "phase": "pre-merge",
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/worker.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/worker.test.ts"
+        }
       ],
       "falsifier": "A failing capability resolves instead of rejecting, or the caller is told something other than what failed",
       "register": "fact",
@@ -367,14 +450,20 @@
     {
       "id": "bridge-answers-the-caller",
       "text": "Every capability call is answered exactly once, and the answer reaches the caller that asked: two concurrent calls never receive each other's answers, and an answer whose id matches no pending call is discarded rather than given to another caller",
-      "scope": [ "src/worker/", "test/worker.test.ts" ],
+      "scope": [
+        "src/worker/",
+        "test/worker.test.ts"
+      ],
       "source": null,
       "kind": "acceptance",
       "phase": "pre-merge",
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/worker.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/worker.test.ts"
+        }
       ],
       "falsifier": "An answer reaches the wrong caller, an answer is delivered twice, or a call is never answered",
       "register": "fact",
@@ -384,14 +473,20 @@
     {
       "id": "bridge-carrying-failures-are-values",
       "text": "A value the channel cannot carry fails the call with an error, in both directions: arguments that cannot be sent and a result that cannot be sent. Neither replaces the other, and the caller is never left waiting for an answer that cannot arrive",
-      "scope": [ "src/worker/", "test/worker.test.ts" ],
+      "scope": [
+        "src/worker/",
+        "test/worker.test.ts"
+      ],
       "source": null,
       "kind": "acceptance",
       "phase": "pre-merge",
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/worker.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/worker.test.ts"
+        }
       ],
       "falsifier": "An argument or a result that the channel refuses leaves the caller waiting, or the failure is reported as something other than a carrying failure",
       "register": "fact",
@@ -401,14 +496,20 @@
     {
       "id": "bridge-answers-once",
       "text": "Every capability call that reaches the host is answered exactly once: a call that succeeded, one that failed and one that was refused each produce a single answer, and no answer is sent for a call that was never made",
-      "scope": [ "src/worker/", "test/worker.test.ts" ],
+      "scope": [
+        "src/worker/",
+        "test/worker.test.ts"
+      ],
       "source": null,
       "kind": "acceptance",
       "phase": "pre-merge",
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/worker.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/worker.test.ts"
+        }
       ],
       "falsifier": "A call receives two answers, or a call receives none",
       "register": "fact",
@@ -419,8 +520,10 @@
       "id": "worker-host-laws",
       "text": "The worker host hands the bridge the application's capability table and nothing else, so the set of capability names the worker can reach is exactly the set of own keys of that table. It passes every event frame it receives to onEvent, unchanged and in arrival order. After terminate() returns it posts no further frame to the worker, including an answer to a call that was in flight. It never lets an exception from the worker, a capability or the channel escape into the application's thread; an exception raised by the application's own onEvent callback is the application's, and propagates",
       "scope": [
-        "src/worker/host.ts", "src/worker/bridge.ts",
-        "test/worker-host.test.ts", "test/worker.test.ts"
+        "src/worker/host.ts",
+        "src/worker/bridge.ts",
+        "test/worker-host.test.ts",
+        "test/worker.test.ts"
       ],
       "source": {
         "kind": "madr",
@@ -446,9 +549,11 @@
     },
     {
       "id": "exchange-delegate-laws",
-      "text": "The delegating side sends exactly one offer, carrying the task id, the task, the context and the names of the tools the peer may call. It forwards every event the peer sends for that task, in arrival order, and ignores frames for another task. A call the peer makes is planned by the host's own dispatch -- the arguments are validated against the tool's dialect, the permission hook's decision and any rewritten arguments both apply, and the tool runs with the arguments the plan carries. A call it cannot run -- unknown tool, invalid arguments, refused by the hook, or a tool that throws -- is answered with a failure carrying the reason, and no exception leaves the delegating side. Every answer carries the task id and the call id of the call it answers. The task resolves with the peer's outcome verbatim, and a refusal resolves as a failure whose error is the peer's reason",
+      "text": "The delegating side sends exactly one offer, carrying the protocol version, the task id, the task and the context, and nothing else: the delegator's tools are never reachable by the peer. It forwards every event the peer sends for that task, in arrival order, and ignores frames for another task and frames it does not know. The task resolves with the peer's outcome verbatim, a refusal resolves as a failure whose error is the peer's reason, and cancelling posts a cancel frame",
       "scope": [
-        "src/exchange/", "src/core/tools.ts", "test/exchange.test.ts"
+        "src/exchange/",
+        "src/core/tools.ts",
+        "test/exchange.test.ts"
       ],
       "source": {
         "kind": "madr",
@@ -462,11 +567,14 @@
       "owner": "petr p.b.kosov@yandex.ru",
       "review_on": [],
       "requirements": [
-        { "kind": "verifier", "spec": "bun test test/exchange.test.ts" }
+        {
+          "kind": "verifier",
+          "spec": "bun test test/exchange.test.ts"
+        }
       ],
-      "falsifier": "The offer is sent twice or without the task, an event arrives out of order, a peer call runs an unregistered tool or bypasses the permission hook, a refusal crashes the delegator, or the outcome never resolves",
+      "falsifier": "The offer carries the delegator's tools, a peer's call to one of them is answered, an event arrives out of order or is dropped, a refusal loses its reason, or the outcome never resolves",
       "register": "fact",
-      "control": "sed -i 's/const plan = planDispatch(\\[call\\], tools, 0, beforeToolCall);/const plan = { turn: 0, groups: [], rejections: [] };/' src/exchange/delegate.ts",
+      "control": "sed -i 's/finish(frame.outcome);/finish({ kind: \"completed\" });/' src/exchange/delegate.ts",
       "waiver": null
     }
   ]

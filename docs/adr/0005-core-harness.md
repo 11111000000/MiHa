@@ -283,9 +283,9 @@ Two rules:
 - **A delegated task's events are ordinary events.** The receiving side renders a
   delegated task exactly as it renders its own.
 
-And one the evidence forced on us: the offer carries the delegator's **tool
-descriptions**, so the peer acts on what the delegator actually exposes rather than on
-a list of bare names ([ADR 0006](./0006-alternatives.md) D36).
+And one the evidence forced on us, and then removed entirely: a peer may not call the
+delegator's tools at all. The offer carries the task, the context and the protocol
+version, and nothing else ([ADR 0007](./0007-peer-boundary.md) D41, D42).
 
 ### D31. The interface layer is optional and outside the core
 

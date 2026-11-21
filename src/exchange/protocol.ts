@@ -4,22 +4,28 @@
  * The frames travel in both directions and mean the same thing on both sides: the
  * frontend agent and the backend agent are peers, and neither is the master.
  *
+ * **A peer may not call the other side's tools.** Delegation is a *task*, not a
+ * capability transfer. Every protocol in this field draws the line the same way —
+ * A2A exchanges declarations and never reaches into the other party's state or tools,
+ * MCP's one server-to-client operation asks for an LLM generation and not a tool
+ * call, and AG-UI carries attribution without orchestration. Our `call` frame was a
+ * callable handle, and it is gone.
+ *
  * Two id spaces. A **task** is one unit of delegated work and is identified by
- * `taskId`. A **call** is one tool invocation inside that task and is identified by
- * `callId`. Both are needed, because a task may make several calls and a peer may be
- * running several tasks at once.
+ * `taskId`. The frames of one task belong to one task and nothing else.
  */
 
 import type { AgentEvent, Outcome } from "../core/events.ts";
-import type { ToolResult } from "../core/messages.ts";
+
+/** The version of the protocol. A peer that speaks another version is refused. */
+export const protocolVersion = 1;
 
 export interface OfferFrame {
 	readonly kind: "offer";
+	readonly version: number;
 	readonly taskId: string;
 	readonly task: string;
 	readonly context?: string;
-	/** The names of the tools the peer may call back. */
-	readonly tools?: readonly string[];
 }
 
 export interface AcceptFrame {
@@ -39,23 +45,6 @@ export interface EventFrame {
 	readonly event: AgentEvent;
 }
 
-export interface CallFrame {
-	readonly kind: "call";
-	readonly taskId: string;
-	readonly callId: string;
-	readonly tool: string;
-	readonly args: unknown;
-}
-
-export interface AnswerFrame {
-	readonly kind: "answer";
-	readonly taskId: string;
-	readonly callId: string;
-	readonly ok: boolean;
-	readonly result?: ToolResult;
-	readonly error?: string;
-}
-
 export interface ResultFrame {
 	readonly kind: "result";
 	readonly taskId: string;
@@ -72,8 +61,6 @@ export type ExchangeFrame =
 	| AcceptFrame
 	| RefuseFrame
 	| EventFrame
-	| CallFrame
-	| AnswerFrame
 	| ResultFrame
 	| CancelFrame;
 
@@ -83,22 +70,13 @@ export interface ExchangePort {
 	onMessage(handler: (message: unknown) => void): void;
 }
 
-const FRAME_KINDS: readonly string[] = [
-	"offer",
-	"accept",
-	"refuse",
-	"event",
-	"call",
-	"answer",
-	"result",
-	"cancel",
-];
+const FRAME_KINDS: readonly string[] = ["offer", "accept", "refuse", "event", "result", "cancel"];
 
 /**
  * Whether a frame is one of ours.
  *
- * A peer may send anything, including rubbish. A frame we do not recognise is
- * ignored rather than trusted, and a frame for another task is not ours.
+ * A peer may send anything, including rubbish, and a peer of another version may send
+ * a frame we do not know. A frame we do not recognise is ignored rather than trusted.
  */
 export function isExchangeFrame(value: unknown): value is ExchangeFrame {
 	if (typeof value !== "object" || value === null) return false;

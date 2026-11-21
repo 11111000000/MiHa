@@ -38,6 +38,11 @@ call back into the browser's tools, which is the core of this project's concept.
 The full comparison, with what it costs us, is in
 [docs/research/04-build-vs-use.md](docs/research/04-build-vs-use.md).
 
+## The architecture, in one document
+
+[docs/architecture.md](docs/architecture.md) — what the thing is, how a run works, what
+the model experiences, where the peer boundary lies, and what holds it together.
+
 ## Where things are
 
 | Path | What |
@@ -46,6 +51,7 @@ The full comparison, with what it costs us, is in
 | `docs/method.md` | **how this repository is developed**: the claim → code → proof → commit loop and the gate |
 | `docs/adr/0005-core-harness.md` | the core harness: the state machine, the tool contract, dispatch, the peer exchange |
 | `docs/adr/0006-alternatives.md` | the alternatives, and what we take from them |
+| `docs/adr/0007-peer-boundary.md` | a peer may be given a task, never a handle on our tools |
 | `docs/adr/0004-quality-bar.md` | the quality bar and the budgets it is measured against |
 | `docs/adr/0003-core-scope.md` | how much of pi to take, and what "parity" means |
 | `docs/adr/0002-core-harness.md` | the architecture |
