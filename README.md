@@ -20,6 +20,24 @@ In the browser MiHa normally runs in a **Web Worker**, so a slow turn never free
 interface. The main thread is the host for everything privileged: DOM, storage, browser
 APIs.
 
+## Why our own core, and not pi's
+
+Measured, for the browser target, minified and gzipped:
+
+| | gzip | Of the 30 KB ceiling |
+|---|---|---|
+| `@earendil-works/pi-agent-core` | **22 638 B** | 76 % |
+| MiHa's core | **5 103 B** | 17 % |
+| MiHa's core + the provider layer | **6 523 B** | 22 % |
+
+Pi's core does not fit the ceiling: the layers MiHa still needs on top of it — the
+worker host, the peer exchange, the trace, the interface — would take it to about
+31 KB. And pi has no way for a backend agent to hand a task to a frontend agent and
+call back into the browser's tools, which is the core of this project's concept.
+
+The full comparison, with what it costs us, is in
+[docs/research/04-build-vs-use.md](docs/research/04-build-vs-use.md).
+
 ## Where things are
 
 | Path | What |
@@ -34,6 +52,7 @@ APIs.
 | `docs/research/01-reference-landscape.md` | the reference harnesses, read and measured |
 | `docs/research/02-scenario-runtime-landscape.md` | browser isolation, WASM, runtime interface generation, stochastic evaluation |
 | `docs/research/03-pi-core-teardown.md` | pi's core taken apart, and the reachability of parity |
+| `docs/research/04-build-vs-use.md` | our core against pi's: the measured comparison, the pros and the cons |
 
 ## Status
 
