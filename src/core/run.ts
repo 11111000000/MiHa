@@ -20,6 +20,7 @@
  */
 
 import { validate } from "../schema/dialect.ts";
+import { assertNever } from "./exhaustive.ts";
 import type { BeforeToolCall } from "./permissions.ts";
 import {
 	assistantMessage,
@@ -322,8 +323,10 @@ function emitUpdate(
 /**
  * Writes the assistant message and decides what happens next.
  *
- * With tool calls, the batch is planned and the run waits for the results. Without
- * them, the turn ends.
+ * With tool calls that may run, the batch is planned and the run waits for the
+ * results. The calls are recorded whatever the stop reason: a call the transcript
+ * holds and nothing answers is a hole the next request would trip on (law M1). So a
+ * turn that ends without dispatching its calls still answers them.
  */
 function finaliseAssistant(
 	state: RunState,
@@ -335,8 +338,7 @@ function finaliseAssistant(
 	const calls: readonly ToolCallBlock[] = accumulator.calls.map((call) =>
 		toolCall(call.id, call.name, call.argumentsText),
 	);
-	const content: readonly ContentBlock[] =
-		stopReason === "toolUse" ? [...accumulator.blocks, ...calls] : accumulator.blocks;
+	const content: readonly ContentBlock[] = [...accumulator.blocks, ...calls];
 	const message: AssistantMessage = assistantMessage(
 		content,
 		stopReason,
@@ -389,7 +391,34 @@ function finaliseAssistant(
 		return { state: { ...base, phase: "dispatching", results: plan.rejections }, outputs };
 	}
 
+	if (accumulator.calls.length > 0) {
+		// The turn ended before the calls could run — the provider failed, or the
+		// output was cut short. The calls are in the transcript, so the transcript
+		// has to answer them; they never ran, so the answer is an error (laws M1
+		// and M4).
+		const reason = undispatchedReason(stopReason, errorMessage);
+		const results = accumulator.calls.map((call) => syntheticResult(call, reason));
+		const flushed = flushResults({ ...base, phase: "dispatching", results }, outputs);
+		return endTurn(flushed, outputs, false);
+	}
+
 	return endTurn({ ...base, phase: "settling" }, outputs, false);
+}
+
+/** Why a call was streamed and never dispatched. */
+function undispatchedReason(stopReason: StopReason, errorMessage: string | undefined): string {
+	switch (stopReason) {
+		case "error":
+			return `the provider failed before this call could run: ${errorMessage ?? "unknown error"}`;
+		case "length":
+			return "the output was cut short before this call could run — re-issue it";
+		case "stop":
+		case "aborted":
+		case "toolUse":
+			return "the turn ended before this call could run — re-issue it if it still matters";
+		default:
+			return assertNever(stopReason);
+	}
 }
 
 /** A tool reported partial progress. */
@@ -547,9 +576,12 @@ function cancelRun(state: RunState): Step {
 	let nextId = state.nextId;
 
 	for (const call of state.calls) {
-		const answered = state.results.some((result) => result.toolCallId === call.id);
-		if (answered) continue;
-		const result = syntheticResult(call, "cancelled");
+		// The transcript says what has been answered, not the turn's buffer: the
+		// buffer is cleared when the next turn starts while the calls stay, and a
+		// call that already has its answer must not get a second one (law M1).
+		if (hasResult(entries, call.id)) continue;
+		const buffered = state.results.find((result) => result.toolCallId === call.id);
+		const result = buffered ?? syntheticResult(call, "cancelled");
 		const id = `m${nextId}`;
 		const entry = messageEntry(id, result);
 		entries = appendEntry(entries, entry);
@@ -561,6 +593,13 @@ function cancelRun(state: RunState): Step {
 
 	const finished: RunState = { ...state, phase: "finished", entries, nextId };
 	return finish(finished, { kind: "cancelled" }, outputs);
+}
+
+/** True when the transcript already holds a result for the call (law M1). */
+function hasResult(entries: readonly TranscriptEntry[], toolCallId: string): boolean {
+	return entries.some(
+		(entry) => entry.message.role === "toolResult" && entry.message.toolCallId === toolCallId,
+	);
 }
 
 /** Exported for the driver: the outcome of a finished run. */

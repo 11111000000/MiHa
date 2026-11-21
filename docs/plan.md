@@ -118,7 +118,7 @@ direction, and a call answered twice.
 Still to do: the host that *owns* the worker — spawning it, forwarding the events to the
 interface, and terminating it. That is the next slice.
 
-**What this slice cost.** Three things the method caught that a test alone would not
+**What this slice cost.** Four things the method caught that a test alone would not
 have:
 
 - The implementation let a broken channel raise out of the host, which in the
@@ -130,6 +130,15 @@ have:
   verifier took a minute instead of a millisecond. A control that breaks the law by
   hanging is a bad control: it costs the whole run and says less than one that fails
   fast.
+- **A discriminator** then broke four more things the controls could not: the closed set
+  leaked `Object.prototype`, a cancelled run answered one call twice, a provider failure
+  mid-batch dropped the streamed call, and the external abort signal did nothing at all.
+  Every one of those had a control, and every control was proven.
+
+That last point is the one to keep: a proven control says the verifier is sensitive to
+*that* mutation. It says nothing about the mutations nobody thought of. A claim is
+settled only after a discriminator has tried to break it — see
+[docs/discriminator.md](./discriminator.md).
 
 ### 8. The peer exchange
 

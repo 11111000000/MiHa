@@ -106,12 +106,12 @@
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
         "section": null,
-        "digest": "b73611722bbdd173d0b3884176fc9d668d160a86d06073c14eeea9286b8016fa",
+        "digest": "e156e52fd1f8b1d81494de6b76aaa8780be2fb5d6a36a9dc92630b81725ad07d",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner re-read the decision: the layer diagram was corrected to the tree it now describes, the bundle budget names what it covers, and the module table gained its measured column. No decision changed -- the corrections make the record match the code, and the layer agreement is now machine-checked",
-          "at": 1795242313,
-          "previous_digest": "5f39d7818b1cba531846fc58b3fad361770f61f406601ced89f063a122650af2"
+          "reason": "Owner re-read the decision: the law set now states the dialect's admission set, adds S6 and S7, and every law carries its derivation. The texts of the claims were narrowed to what is actually enforced, so that a claim can be falsified",
+          "at": 1795253248,
+          "previous_digest": "b73611722bbdd173d0b3884176fc9d668d160a86d06073c14eeea9286b8016fa"
         }
       },
       "kind": "acceptance",
@@ -128,18 +128,18 @@
     },
     {
       "id": "stream-laws",
-      "text": "The event stream satisfies laws S1 to S5: events are delivered in push order exactly once, result resolves exactly once with the terminal value, events after the terminal are ignored, iteration ends after the terminal event, and no event is lost between a push and the start of iteration",
+      "text": "The event stream satisfies laws S1 to S7 as written in ADR 0004 D22: events arrive in push order exactly once, result resolves once with the terminal value, late events are ignored, iteration ends after the terminal event, nothing is lost between a push and the start of iteration, a failure ends iteration by throwing and rejects result, and a close without a terminal event rejects result and ends iteration",
       "scope": [ "src/core/event-stream.ts", "test/event-stream.test.ts" ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
         "section": null,
-        "digest": "b73611722bbdd173d0b3884176fc9d668d160a86d06073c14eeea9286b8016fa",
+        "digest": "e156e52fd1f8b1d81494de6b76aaa8780be2fb5d6a36a9dc92630b81725ad07d",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner re-read the decision: the layer diagram was corrected to the tree it now describes, the bundle budget names what it covers, and the module table gained its measured column. No decision changed -- the corrections make the record match the code, and the layer agreement is now machine-checked",
-          "at": 1795242313,
-          "previous_digest": "5f39d7818b1cba531846fc58b3fad361770f61f406601ced89f063a122650af2"
+          "reason": "Owner re-read the decision: the law set now states the dialect's admission set, adds S6 and S7, and every law carries its derivation. The texts of the claims were narrowed to what is actually enforced, so that a claim can be falsified",
+          "at": 1795253248,
+          "previous_digest": "b73611722bbdd173d0b3884176fc9d668d160a86d06073c14eeea9286b8016fa"
         }
       },
       "kind": "acceptance",
@@ -156,18 +156,18 @@
     },
     {
       "id": "dialect-laws",
-      "text": "The tool-parameter dialect satisfies laws C1 to C3: every value the dialect admits is accepted, every value it does not admit is rejected with a JSON Pointer path, and coercion happens only where the dialect declares it",
+      "text": "The tool-parameter dialect satisfies laws C1 to C3 as written in ADR 0004 D22: every value the dialect admits is accepted, every value it does not admit is rejected with an RFC 6901 JSON Pointer path, and coercion happens only where the dialect says so. The admission set is the table in the decision, not the implementation",
       "scope": [ "src/schema/dialect.ts", "test/dialect.test.ts" ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0004-quality-bar.md",
         "section": null,
-        "digest": "b73611722bbdd173d0b3884176fc9d668d160a86d06073c14eeea9286b8016fa",
+        "digest": "e156e52fd1f8b1d81494de6b76aaa8780be2fb5d6a36a9dc92630b81725ad07d",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "Owner re-read the decision: the layer diagram was corrected to the tree it now describes, the bundle budget names what it covers, and the module table gained its measured column. No decision changed -- the corrections make the record match the code, and the layer agreement is now machine-checked",
-          "at": 1795242313,
-          "previous_digest": "5f39d7818b1cba531846fc58b3fad361770f61f406601ced89f063a122650af2"
+          "reason": "Owner re-read the decision: the law set now states the dialect's admission set, adds S6 and S7, and every law carries its derivation. The texts of the claims were narrowed to what is actually enforced, so that a claim can be falsified",
+          "at": 1795253248,
+          "previous_digest": "b73611722bbdd173d0b3884176fc9d668d160a86d06073c14eeea9286b8016fa"
         }
       },
       "kind": "acceptance",
@@ -186,7 +186,8 @@
       "id": "tools-laws",
       "text": "The dispatch planner satisfies laws M1, M2 and M3 and policy T1: every call of a batch appears exactly once across the plan and the rejections, a call whose arguments did not arrive complete is never planned for execution, a failed tool is a result carrying isError rather than ordinary content, and an exclusive tool runs alone while shared tools around it still share a group",
       "scope": [
-        "src/core/tools.ts", "src/core/permissions.ts", "test/tools.test.ts"
+        "src/core/tools.ts", "src/core/json.ts", "src/core/permissions.ts",
+        "test/tools.test.ts"
       ],
       "source": {
         "kind": "madr",
@@ -209,7 +210,7 @@
     },
     {
       "id": "run-laws",
-      "text": "The state machine and the driver together keep laws M1, M2, M3, M4 and T4 over a whole run: every tool call of every batch receives exactly one result including on rejection, tool failure, provider error and cancellation; a call with arguments that did not arrive complete is never executed; a failed tool is a result carrying isError; a provider failure is an event rather than a throw; and the tool results are recorded in assistant order",
+      "text": "The state machine and the driver keep laws M1 to M4 and T4 over a whole run: every tool call of every batch receives exactly one result -- including on rejection, tool failure, truncation, provider error and cancellation -- the results are recorded in assistant order, a failed tool is a result carrying isError, a provider failure is an event that leaves every streamed call answered, and an aborted signal ends the run at the next boundary with every in-flight call answered",
       "scope": [
         "src/core/run.ts", "src/core/loop.ts", "src/core/transcript.ts",
         "test/e2e.test.ts"
@@ -255,7 +256,7 @@
     },
     {
       "id": "provider-never-throws",
-      "text": "The provider adapter never throws and never rejects: a network failure, a refusal, a malformed chunk and a stream that ends without a terminal event all arrive at the core as an error event, so the core's pairing invariant survives a broken provider",
+      "text": "The provider adapter never throws and never rejects: a network failure, a refusal, a malformed chunk, a tool call without a stream index, any exception raised while reading the provider's body, and a stream that ends without a terminal event all arrive at the core as an error event, so the core's pairing invariant survives a broken provider",
       "scope": [ "src/llm/", "test/llm.test.ts" ],
       "source": {
         "kind": "madr",
@@ -283,7 +284,7 @@
     },
     {
       "id": "provider-arguments-intact",
-      "text": "Every fragment of a tool call's arguments reaches the core in order and attached to the right call: parallel calls are correlated by their stream index, the arguments of each call concatenate to exactly what the provider sent, and a call whose id arrives late still starts once and carries every fragment",
+      "text": "Every fragment of a tool call's arguments reaches the core in order and attached to the right call: parallel calls are correlated by their stream index, the arguments of each call concatenate to exactly what the provider sent, a call whose id arrives late still starts once and carries every fragment, and a call without a stream index is refused rather than merged into another call",
       "scope": [ "src/llm/tool-calls.ts", "test/llm.test.ts" ],
       "source": {
         "kind": "madr",
@@ -331,7 +332,7 @@
     },
     {
       "id": "bridge-closed",
-      "text": "The capability bridge is a closed set: only the capabilities the host registered are reachable, an unknown capability is refused by name, and the caller's promise is told so",
+      "text": "The capability bridge is a closed set: only a capability that is an **own** entry of the host's table is reachable, a name inherited from Object.prototype is not registered and is refused by name, and the caller is told which capability was refused",
       "scope": [ "src/worker/", "test/worker.test.ts" ],
       "source": null,
       "kind": "acceptance",
@@ -343,12 +344,12 @@
       ],
       "falsifier": "A capability the host did not register can be called, or the caller is not told which capability was refused",
       "register": "fact",
-      "control": "sed -i 's/const capability = capabilities\\[frame.capability\\];/const capability = capabilities[frame.capability] ?? (async () => \"anything goes\");/' src/worker/bridge.ts",
+      "control": "sed -i 's/Object.hasOwn(capabilities, frame.capability)/true/' src/worker/bridge.ts",
       "waiver": null
     },
     {
       "id": "bridge-failures-are-values",
-      "text": "A capability that fails rejects the caller with the failure's own message, whether it failed by throwing or by rejecting, and the failure does not escape as an unhandled rejection",
+      "text": "A capability that fails rejects the caller with an Error whose message is **exactly** the failure's message: error.message for an Error, String(value) otherwise, and a capability failure and a carrying failure stay distinguishable from each other",
       "scope": [ "src/worker/", "test/worker.test.ts" ],
       "source": null,
       "kind": "acceptance",
@@ -365,7 +366,7 @@
     },
     {
       "id": "bridge-answers-the-caller",
-      "text": "Every capability call is answered exactly once, and the answer reaches the caller that asked: two concurrent calls never receive each other's answers",
+      "text": "Every capability call is answered exactly once, and the answer reaches the caller that asked: two concurrent calls never receive each other's answers, and an answer whose id matches no pending call is discarded rather than given to another caller",
       "scope": [ "src/worker/", "test/worker.test.ts" ],
       "source": null,
       "kind": "acceptance",
@@ -382,7 +383,7 @@
     },
     {
       "id": "bridge-carrying-failures-are-values",
-      "text": "A value the channel cannot carry fails the call with an error, in both directions: arguments that cannot be sent, and a result that cannot be sent. The caller is never left waiting for an answer that cannot arrive",
+      "text": "A value the channel cannot carry fails the call with an error, in both directions: arguments that cannot be sent and a result that cannot be sent. Neither replaces the other, and the caller is never left waiting for an answer that cannot arrive",
       "scope": [ "src/worker/", "test/worker.test.ts" ],
       "source": null,
       "kind": "acceptance",
@@ -399,7 +400,7 @@
     },
     {
       "id": "bridge-answers-once",
-      "text": "Every capability call is answered exactly once: a call that succeeded, one that failed and one that was refused each produce a single answer, and a call that was never made produces none",
+      "text": "Every capability call that reaches the host is answered exactly once: a call that succeeded, one that failed and one that was refused each produce a single answer, and no answer is sent for a call that was never made",
       "scope": [ "src/worker/", "test/worker.test.ts" ],
       "source": null,
       "kind": "acceptance",

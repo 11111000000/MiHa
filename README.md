@@ -50,9 +50,16 @@ In place now: the message and event algebras, the event stream with its five law
 own tool-parameter schema dialect, the tool contract and dispatch plan, the append-only
 transcript, the six-state machine, the driver and the provider layer — an agent runs end
 to end against a scripted or OpenAI-compatible provider, plus the capability bridge
-that lets a worker ask the host for the DOM and the storage: 79 tests, 4 828 B gzip
-for the core and 6 239 B with the provider layer, against a 30 000 B ceiling. Zero
-runtime dependencies.
+that lets a worker ask the host for the DOM and the storage: 89 tests, 5 096 B gzip for
+the core and 6 516 B with the provider layer, against a 30 000 B ceiling. Zero runtime
+dependencies.
+
+Every claim has been through a **discriminator** — an agent whose job is to break the
+work rather than confirm it. The first pass found four defects that every proven
+control had missed: a closed set that leaked `Object.prototype`, a cancelled run that
+answered one call twice, a provider failure that dropped the streamed call, and an
+external abort signal that did nothing at all. The protocol is in
+[docs/discriminator.md](docs/discriminator.md).
 
 The core is designed as a **pure transition function**: it performs no I/O and emits
 intents, the driver performs them, and the laws are properties of that function. The run

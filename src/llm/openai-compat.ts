@@ -208,6 +208,7 @@ export function openaiCompat(options: OpenAiCompatOptions): ProviderFn {
 					return;
 				}
 
+				// MiHa asks for one choice, so the choice it asked for is the first one.
 				const choice = chunk.choices?.[0];
 				if (choice?.finish_reason !== undefined && choice.finish_reason !== null) {
 					stopReason = stopReasonOf(choice.finish_reason);
@@ -230,8 +231,18 @@ export function openaiCompat(options: OpenAiCompatOptions): ProviderFn {
 					yield { type: "reasoning_delta", delta: delta.reasoning_content };
 				}
 				for (const call of delta?.tool_calls ?? []) {
+					if (call.index === undefined) {
+						// A call without a stream index cannot be correlated with the
+						// others. Merging it into the first one would hand the model
+						// somebody else's arguments, so it is refused.
+						yield {
+							type: "error",
+							message: "the provider sent a tool call without a stream index",
+						};
+						return;
+					}
 					const events = tracker.feed({
-						index: call.index ?? 0,
+						index: call.index,
 						...(call.id === undefined ? {} : { id: call.id }),
 						...(call.function?.name === undefined ? {} : { name: call.function.name }),
 						...(call.function?.arguments === undefined

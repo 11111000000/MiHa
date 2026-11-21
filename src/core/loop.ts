@@ -26,6 +26,7 @@ import {
 	type HarnessConfig,
 	type Input,
 	type Output,
+	type Phase,
 	type ProviderRequest,
 	type RunState,
 } from "./run.ts";
@@ -86,8 +87,26 @@ export function runAgent(
 		}
 	};
 
+	/** The phase as it stands now. A call, because `apply` moves it on. */
+	const phase = (): Phase => state.phase;
+
+	// The outside world may stop the run. The merged signal cuts the host's work
+	// short, but the core has to be told as well: a run that merely ran out of work
+	// would report that instead of a cancellation.
+	const onAbort = (): void => {
+		apply({ kind: "cancel" });
+	};
+	if (options.signal && !options.signal.aborted) {
+		options.signal.addEventListener("abort", onAbort, { once: true });
+	}
+
 	const perform = async (): Promise<void> => {
 		apply({ kind: "prompt", message: options.message });
+		if (options.signal?.aborted) {
+			// Cancelled before the first turn: the run still starts, and it still ends.
+			apply({ kind: "cancel" });
+			return;
+		}
 
 		while (state.phase !== "finished") {
 			const intent = intents.shift();
@@ -100,6 +119,9 @@ export function runAgent(
 				case "provider_request":
 					for await (const event of host.callProvider(intent.request, signal)) {
 						apply({ kind: "provider", event });
+						// The run is over — cancelled, or the last turn — so the rest of
+						// the provider's stream is of no interest.
+						if (phase() === "finished") break;
 					}
 					break;
 				case "tool_plan":
@@ -123,6 +145,10 @@ export function runAgent(
 			}
 		} catch (error) {
 			stream.fail(error);
+		} finally {
+			options.signal?.removeEventListener("abort", onAbort);
+			// The run is over, so whatever the host still has running stops too.
+			controller.abort();
 		}
 	})();
 

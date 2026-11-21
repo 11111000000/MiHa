@@ -37,6 +37,25 @@ changing anything.
 9. **Our own harness, our own decisions.** Upstream pi is a source of *questions*, not
    of answers. Where our behaviour differs from another's, the difference is stated and
    justified.
+10. **A claim is settled only after a discriminator has tried to break it.** A control
+    proves the verifier is sensitive to one mutation. It does not prove the claim is
+    true.
+
+## For the agents
+
+Two roles, and they are not the same job.
+
+**An implementer** writes the subject and its tests, and declares the claims. It never
+edits `spec.json` and never edits a decision — it proposes, the owner records.
+
+**A discriminator** tries to break the work. It reads the claim, the subject and the
+verifier, invents mutations the claim's text forbids but the claim's own control does
+not make, and tests them in an isolated copy. It reports; it never edits the subject and
+never commits. The protocol is in [docs/discriminator.md](docs/discriminator.md).
+
+Work runs in parallel when the **claim scopes do not overlap** — one file, one agent —
+and the core is frozen while the layers above it are built. At most two heavy checks at
+a time: this host has four cores and several agents live on it.
 
 ## The loop
 

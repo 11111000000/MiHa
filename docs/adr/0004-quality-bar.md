@@ -119,32 +119,56 @@ distinction is the whole point:
 A law with no derivation is a preference wearing the name of a law. Every law below has
 one.
 
-**Derived laws** — from the protocol facts in
-[research 03](../research/03-pi-core-teardown.md) §17
+#### The tool-parameter dialect: what it admits
+
+This table is the dialect's **admission set**. It is written here so that law C1 can be
+falsified from outside the implementation: a value is admitted if the table admits it,
+not if the code happens to accept it.
+
+| Kind | Admits | Coercion, when the node says `coerce` |
+|---|---|---|
+| `object` | a plain object — not `null`, not an array | — |
+| `array` | an array | — |
+| `string` | a string; if `enum` is given, one of its members | a number or a boolean becomes its text |
+| `number` | a finite number; an integer when `integer` is set | a numeric string becomes a number |
+| `boolean` | a boolean | `"true"` or `"false"`, in any case, becomes a boolean |
+| `null` | `null` | — |
+| `any` | anything | — |
+
+Two more rules, which are part of the dialect rather than of one kind:
+
+- **Unknown properties.** `additional: false` rejects them; a schema validates them;
+  without `additional` they pass through untouched.
+- **Paths.** A rejection names the offending node by an **RFC 6901 JSON Pointer**: `~`
+  becomes `~0` and `/` becomes `~1`.
+
+#### Derived laws
 
 | Law | Derivation | Test |
 |---|---|---|
-| **M1** every tool call receives exactly one tool result — on abort, on truncation, on provider error, on an unknown tool | the provider rejects the next request whose call has no result (F1) | one assertion per failure path |
-| **M2** a call whose arguments did not arrive complete is never executed; it is answered with an error asking the model to re-issue | the output-token limit truncates the argument stream mid-JSON (F2) | a call cut at every offset is answered and never executed |
-| **M3** a failed tool is a result with `isError`, never ordinary content | the model must be able to read the failure and recover | a throwing tool and an `isError` tool both produce a result |
-| **M4** a provider failure is an event, and the pairing of M1 survives it | a request can fail at any point (F3) | a failure mid-batch leaves every call answered |
+| **M1** every tool call of every batch receives exactly one result — never none, never two — including on rejection, tool failure, truncation, provider error and cancellation | the provider rejects the next request whose call has no result, and a transcript with an unanswered call cannot be replayed | one assertion per failure path, and a batch of two calls |
+| **M2** a call whose arguments did not arrive complete is never executed; it is answered with an error asking the model to re-issue | the output-token limit truncates the argument stream mid-JSON, and a fragment may parse and validate while being incomplete | a truncated argument string is rejected, never planned |
+| **M3** a failed tool is a result carrying `isError`, never ordinary content | the model has to be able to read the failure and recover | a throwing tool and an `isError` tool both produce a result |
+| **M4** a provider failure is an event, and M1 survives it: every call the provider streamed is answered and stays in the transcript | a request can fail at any point, and the calls it had already streamed are real | a provider that fails after streaming a call |
+| **S1** events are delivered in push order, each exactly once | the stream is the only channel; reordering would make a trace unreadable | one test |
+| **S2** `result()` resolves exactly once, with the terminal event's value | a run has one outcome | one test |
+| **S3** events pushed after the terminal event are ignored | the run is over; there is nothing to deliver them to | one test |
+| **S4** iteration ends after the terminal event has been delivered | a consumer must be able to stop on the terminal event without draining a buffer | one test |
+| **S5** no event is lost between a push and the start of iteration | the producer may run ahead of the consumer | one test |
+| **S6** a failure ends the iteration by throwing and rejects `result()` | a failure is not a protocol event; it is the absence of one | one test |
+| **S7** a close without a terminal event rejects `result()` and ends the iteration without events | a producer bug must surface rather than hang | one test |
+| **C1** every value the dialect admits is accepted | a dialect we implement completely must not reject its own values | one test per kind, against the table above |
+| **C2** every value the dialect does not admit is rejected, with an RFC 6901 JSON Pointer path | the model can only fix an argument it can locate | one test per kind, plus a property name holding `/` and `~` |
+| **C3** coercion happens only where the dialect says so | implicit coercion is how a schema becomes unpredictable | one test per coercible kind |
 
-**Chosen laws** — our policy, stated so that it can be relied on
+#### Chosen laws
 
 | Law | Choice | Why |
 |---|---|---|
-| **S1** events are delivered in push order, each exactly once | the stream is the only channel; reordering would make a trace unreadable | — |
-| **S2** `result()` resolves exactly once, with the terminal event's value | a run has one outcome, and a second resolution would be a bug that hides | — |
-| **S3** events pushed after the terminal event are ignored | the run is over; there is nothing to deliver them to | — |
-| **S4** iteration ends after the terminal event has been delivered | a consumer must be able to stop on the terminal event without draining a buffer | — |
-| **S5** no event is lost between a push and the start of iteration | the producer may run ahead of the consumer | — |
-| **T1** an exclusive tool runs alone; shared tools around it still run in parallel | "exclusive" means *must not interleave with another exclusive tool*, not *serialise the turn*. Upstream takes the stricter reading; we take the useful one | — |
-| **T2** a steering message is delivered at the next tool-call boundary | delivering mid-batch would interrupt a tool that has already started; delivering after the run ends would lose it | — |
-| **T3** the turn ends when there are no tool calls and no queued messages | one rule, no continuation hook: the loop's exit is a consequence of its state | — |
-| **T4** tool results are recorded in assistant order | the transcript must replay; a live view can still follow completion order, and the two are separate concerns | — |
-| **C1** the dialect accepts every value it admits | a dialect we implement completely must not reject its own values | — |
-| **C2** the dialect rejects every value it does not admit, with a path | the model can only fix an argument it can locate | — |
-| **C3** coercion happens only where the dialect says so | implicit coercion is how a schema becomes unpredictable | — |
+| **T1** an exclusive tool runs alone; the shared tools around it still share a group and run in parallel. Groups run in order | "exclusive" means *must not interleave with another exclusive tool*, not *serialise the turn*. Only the exact value `"exclusive"` is exclusive | the looser reading keeps the common case fast, and the order of the groups is the order of the calls |
+| **T2** a steering message is delivered at the next tool-call boundary | delivering mid-batch would interrupt a tool that has already started; delivering after the run ends would lose it | the user is answered at the first moment it is safe |
+| **T3** the turn ends when there are no tool calls and no queued messages | one rule, no continuation hook: the loop's exit is a consequence of its state | a hook is a policy the core would then have to own |
+| **T4** tool results are recorded in assistant order | the transcript must replay; a live view can still follow completion order, and the two are separate concerns | one order for the record, another for the screen |
 
 Each law has one test, and each test fails when the law fails.
 

@@ -180,6 +180,20 @@ Two readings, both worth keeping:
   time a claim is refuted, the criterion becomes computable. Until then, the honest
   statement is that the method's value here is unproven — not that it has no value.
 
+## The discriminator
+
+The method proves a claim by running one mutation and watching the verifier fail. A
+**discriminator** closes the gap: it tries to break the claim with mutations the claim's
+own control does not make, and reports the ones the verifier lets through.
+
+It is the part of the method that a machine cannot do, and it is where the real defects
+were found: the first run over the bridge and the core produced 47 mutations, 26 caught
+and 21 not — and four of the uncaught ones were the shipped code already breaking the
+claim. The protocol, the report format and the parallel-work rules are in
+[docs/discriminator.md](./discriminator.md).
+
+A claim is settled only after a discriminator has tried to break it.
+
 ## What is claimed, and what is merely gated
 
 | | Claimed (machine-confirmed, with a control) | Gated only |

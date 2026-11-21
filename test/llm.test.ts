@@ -183,6 +183,24 @@ describe("the adapter never throws", () => {
 	});
 });
 
+	test("a tool call without a stream index is refused, not merged into the first", async () => {
+		const body = [
+			'data: {"choices":[{"delta":{"tool_calls":[{"id":"c1","function":{"name":"read_file","arguments":"{}"}}]}}]}',
+			"",
+			"data: [DONE]",
+			"",
+		].join("\n");
+
+		const provider = openaiCompat({
+			baseUrl: "http://provider.invalid/v1",
+			fetch: async () => ({ ok: true, status: 200, body: chunkStream(body) }),
+		});
+		const events = await collect(provider(request(), new AbortController().signal));
+
+		expect(events).toHaveLength(1);
+		expect(events[0]?.type).toBe("error");
+	});
+
 describe("the adapter lowers the request", () => {
 	test("a complete stream becomes the core's events", async () => {
 		const body = [

@@ -5,6 +5,9 @@
  * host's thread. The bridge is how the worker asks for them — and it is a **closed
  * set**: only the capabilities the host registered are reachable.
  *
+ * "Registered" means *the host's own entry*. The prototype chain is the language's,
+ * not the host's, so `toString` is no more a capability here than `console` is.
+ *
  * The transport exists on both sides; the bridge is the part that knows which frames
  * are its own.
  *
@@ -36,6 +39,13 @@ export interface CapabilityClientOptions {
 	readonly onOtherFrame?: (frame: unknown) => void;
 }
 
+/**
+ * The failure's own message, and nothing else.
+ *
+ * `error.message` for an error — not `String(error)`, which would dress it up as
+ * `"Error: the disk is on fire"` and be something other than what failed. A failure
+ * that is not an error is a value, and a value has a string of its own.
+ */
 function messageOf(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
@@ -98,14 +108,21 @@ export function createCapabilityClient(
  * The host side: it performs the capabilities the worker asks for.
  */
 export function createCapabilityHost(port: Channel, options: CapabilityHostOptions): void {
+	// The host's table, seen as a closed set: only an own property of it is an entry
+	// the host made.
+	const capabilities = options.capabilities;
+
 	port.onMessage((message) => {
 		const frame = message as UpFrame;
 		if (frame?.kind !== "call") {
 			options.onOtherFrame?.(message);
 			return;
 		}
-		const capabilities = options.capabilities;
-		const capability = capabilities[frame.capability];
+		// Only an own entry of the host's table is a registered capability. A plain
+		// lookup would also find what the language puts on Object.prototype.
+		const capability = Object.hasOwn(capabilities, frame.capability)
+			? capabilities[frame.capability]
+			: undefined;
 		if (!capability) {
 			send(port, {
 				kind: "answer",
