@@ -40,14 +40,19 @@ The full comparison, with what it costs us, is in
 
 ## The architecture, in one document
 
-[docs/architecture.md](docs/architecture.md) — what the thing is, how a run works, what
-the model experiences, where the peer boundary lies, and what holds it together.
+**[docs/target-architecture.md](docs/target-architecture.md)** — the target design: the
+principle it is organised by, the five parts, the eight guarantees the model gets, the
+four budgets, the three seams, and what is deliberately absent.
+
+[docs/architecture.md](docs/architecture.md) — the same design in the shape it has
+today: what the thing is, how a run works, where the peer boundary lies.
 
 ## Where things are
 
 | Path | What |
 |---|---|
 | `docs/plan.md` | **the route through the work**: what is built, in what order, how each piece is proved |
+| `docs/target-architecture.md` | **the target design**: the principle, the parts, the guarantees, the budgets |
 | `docs/method.md` | **how this repository is developed**: the claim → code → proof → commit loop and the gate |
 | `docs/adr/0005-core-harness.md` | the core harness: the state machine, the tool contract, dispatch, the peer exchange |
 | `docs/adr/0006-alternatives.md` | the alternatives, and what we take from them |
