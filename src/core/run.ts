@@ -22,6 +22,12 @@
 import { validate } from "../schema/dialect.ts";
 import { assertNever } from "./exhaustive.ts";
 import {
+	DEFAULT_RESULT_BUDGET,
+	resolveBudget,
+	truncateContent,
+	truncateToolResult,
+} from "./budget.ts";
+import {
 	assistantMessage,
 	emptyUsage,
 	toolCall,
@@ -48,12 +54,37 @@ import {
 
 export type Phase = "idle" | "requesting" | "streaming" | "dispatching" | "settling" | "finished";
 
+/** The default turn limit: 32, twice the observed median task (ADR 0009 D51). */
+export const DEFAULT_TURN_LIMIT = 32;
+
+/**
+ * Resolves the host's turn limit into the one the core enforces.
+ *
+ * Zero is honoured: the run makes no provider request at all. A limit that is not a
+ * number, or a negative one, is nonsense, and nonsense gets the default.
+ */
+export function resolveTurnLimit(limit: number | undefined): number {
+	if (limit === undefined) return DEFAULT_TURN_LIMIT;
+	if (Number.isNaN(limit) || limit < 0) return DEFAULT_TURN_LIMIT;
+	return limit;
+}
+
+export { DEFAULT_RESULT_BUDGET } from "./budget.ts";
+
 export interface HarnessConfig {
 	readonly model: string;
 	readonly system: string;
 	readonly tools: ToolRegistry;
-	/** How many provider requests a run may make. A policy, not a law (ADR 0006 D32). */
-	readonly turnLimit: number;
+	/**
+	 * How many provider requests a run may make. A policy, not a law (ADR 0006 D32);
+	 * the default is 32 — twice the observed median task (ADR 0009 D51).
+	 */
+	readonly turnLimit?: number;
+	/**
+	 * The byte budget for one tool result's text, head and tail kept (ADR 0006 D34);
+	 * the default is 8 192 B (ADR 0009 D50). `Infinity` disables it.
+	 */
+	readonly resultBudget?: number;
 	readonly options?: Readonly<Record<string, unknown>>;
 }
 
@@ -103,6 +134,10 @@ interface Accumulator {
 export interface RunState {
 	readonly phase: Phase;
 	readonly config: HarnessConfig;
+	/** The resolved turn limit: the config's, or the default (ADR 0009 D51). */
+	readonly turnLimit: number;
+	/** The resolved result budget in bytes: the config's, or the default (ADR 0009 D50). */
+	readonly resultBudget: number;
 	readonly entries: readonly TranscriptEntry[];
 	/** How many provider requests have been made. */
 	readonly turn: number;
@@ -122,6 +157,8 @@ export function initialState(config: HarnessConfig): RunState {
 	return {
 		phase: "idle",
 		config,
+		turnLimit: resolveTurnLimit(config.turnLimit),
+		resultBudget: resolveBudget(config.resultBudget),
 		entries: [],
 		turn: 0,
 		nextId: 1,
@@ -178,6 +215,10 @@ function queueMessage(state: RunState, message: AgentMessage): Step {
 
 /** Starts a provider turn: emits `turn_start` and asks the host to call the provider. */
 function beginTurn(state: RunState, outputs: Output[]): Step {
+	if (state.turn > state.turnLimit) {
+		// The limit is spent: the run ends without asking the provider at all.
+		return finish(state, { kind: "limitReached", turns: state.turnLimit }, outputs);
+	}
 	const request: ProviderRequest = {
 		model: state.config.model,
 		system: state.config.system,
@@ -377,11 +418,13 @@ function finaliseAssistant(
 		if (plan.groups.length === 0) {
 			// Every call was rejected, so the batch is already answered and the driver
 			// has nothing to execute. Closing it here is what keeps the pairing whole.
-			const flushed = flushResults({ ...base, phase: "dispatching", results: plan.rejections }, outputs);
+			const rejections = plan.rejections.map((result) => budgeted(base, result));
+			const flushed = flushResults({ ...base, phase: "dispatching", results: rejections }, outputs);
 			return endTurn(flushed, outputs, true);
 		}
 
-		return { state: { ...base, phase: "dispatching", results: plan.rejections }, outputs };
+		const rejections = plan.rejections.map((result) => budgeted(base, result));
+		return { state: { ...base, phase: "dispatching", results: rejections }, outputs };
 	}
 
 	if (accumulator.calls.length > 0) {
@@ -390,7 +433,7 @@ function finaliseAssistant(
 		// has to answer them; they never ran, so the answer is an error (laws M1
 		// and M4).
 		const reason = undispatchedReason(stopReason, errorMessage);
-		const results = accumulator.calls.map((call) => syntheticResult(call, reason));
+		const results = accumulator.calls.map((call) => budgeted(base, syntheticResult(call, reason)));
 		const flushed = flushResults({ ...base, phase: "dispatching", results }, outputs);
 		return endTurn(flushed, outputs, false);
 	}
@@ -414,6 +457,16 @@ function undispatchedReason(stopReason: StopReason, errorMessage: string | undef
 	}
 }
 
+/**
+ * The one seam every tool result crosses before it reaches the transcript
+ * (ADR 0009 D50): a rejection, a failure, a synthetic answer and a real result are
+ * budgeted the same way. A result that crosses this seam twice is truncated twice,
+ * so every path calls it exactly once.
+ */
+function budgeted(state: RunState, result: ToolResultMessage): ToolResultMessage {
+	return truncateToolResult(result, state.resultBudget);
+}
+
 /** A tool reported partial progress. */
 function applyToolProgress(state: RunState, toolCallId: string, partial: ToolResult): Step {
 	if (state.phase !== "dispatching") return { state, outputs: [] };
@@ -429,7 +482,10 @@ function applyToolProgress(state: RunState, toolCallId: string, partial: ToolRes
 					toolCallId,
 					toolName: call.name,
 					args: {},
-					partialResult: partial,
+					partialResult: {
+						...partial,
+						content: truncateContent(partial.content, state.resultBudget),
+					},
 				},
 			},
 		],
@@ -445,7 +501,9 @@ function applyToolProgress(state: RunState, toolCallId: string, partial: ToolRes
  */
 function flushResults(state: RunState, outputs: Output[]): RunState {
 	const ordered = state.calls.map(
-		(call) => state.results.find((result) => result.toolCallId === call.id) ?? syntheticResult(call, "no result"),
+		(call) =>
+			state.results.find((result) => result.toolCallId === call.id) ??
+			budgeted(state, syntheticResult(call, "no result")),
 	);
 
 	let entries = state.entries;
@@ -471,9 +529,10 @@ function flushResults(state: RunState, outputs: Output[]): RunState {
  * while the execution events go out as each result arrives, so the live view follows
  * completion order.
  */
-function applyToolResult(state: RunState, result: ToolResultMessage): Step {
+function applyToolResult(state: RunState, incoming: ToolResultMessage): Step {
 	if (state.phase !== "dispatching") return { state, outputs: [] };
 
+	const result = budgeted(state, incoming);
 	const results = [...state.results, result];
 	const outputs: Output[] = [
 		{
@@ -515,7 +574,7 @@ function endTurn(state: RunState, outputs: Output[], hadToolCalls: boolean): Ste
 		event: { type: "turn_end", message: last, toolResults: state.results },
 	});
 
-	if (state.turn >= state.config.turnLimit) {
+	if (state.turn >= state.turnLimit) {
 		return finish(state, { kind: "limitReached", turns: state.turn }, outputs);
 	}
 
@@ -574,7 +633,7 @@ function cancelRun(state: RunState): Step {
 		// call that already has its answer must not get a second one (law M1).
 		if (hasResult(entries, call.id)) continue;
 		const buffered = state.results.find((result) => result.toolCallId === call.id);
-		const result = buffered ?? syntheticResult(call, "cancelled");
+		const result = buffered ?? budgeted(state, syntheticResult(call, "cancelled"));
 		const id = `m${nextId}`;
 		const entry = messageEntry(id, result);
 		entries = appendEntry(entries, entry);

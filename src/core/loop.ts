@@ -167,6 +167,14 @@ export function runAgent(
 					break;
 			}
 		}
+
+		// The run is over, but the host still has to receive the last entries: the
+		// loop stops the moment the machine finishes, and the appends of that final
+		// turn are still queued. A transcript the host never saw is a transcript the
+		// host cannot keep.
+		for (const intent of intents) {
+			if (intent.kind === "append") host.append?.(intent.entry);
+		}
 	};
 
 	void (async () => {

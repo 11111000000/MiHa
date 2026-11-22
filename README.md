@@ -58,6 +58,7 @@ qualities of the harness itself: **effective · reliable · small · frugal**.
 | `docs/adr/0006-alternatives.md` | the alternatives, and what we take from them |
 | `docs/adr/0007-peer-boundary.md` | a peer may be given a task, never a handle on our tools |
 | `docs/adr/0008-final-architecture.md` | the decision that fixed the final architecture |
+| `docs/adr/0009-policy-defaults.md` | the three policy defaults: result 8 192 B, turns 32, window 64 |
 | `docs/adr/0004-quality-bar.md` | the quality bar and the budgets it is measured against |
 | `docs/adr/0003-core-scope.md` | how much of pi to take, and what "parity" means |
 | `docs/adr/0002-core-harness.md` | the architecture |

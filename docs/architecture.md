@@ -193,13 +193,13 @@ Derived from protocol facts, each with its witness where it depends on the drive
 
 **The host sets the policy; the core enforces the law.**
 
-| Budget | Limit | Set by | Enforced by |
-|---|---|---|---|
-| bundle | 30 000 B gzip, browser, minified | us | the build fails |
-| result | bytes per tool result | the host | the core truncates and announces |
-| turns | per run | the host | the outcome says `limitReached` |
-| context | tokens per projection | the host | the fold's accounting |
-| memory | the resident window | the host | R1 |
+| Budget | Limit | Set by | Enforced by | Default |
+|---|---|---|---|---|
+| bundle | 30 000 B gzip, browser, minified | us | the build fails | — |
+| result | bytes per tool result | the host | the core truncates and announces | 8 192 B, head and tail kept ([ADR 0009](./adr/0009-policy-defaults.md) D50) |
+| turns | per run | the host | the outcome says `limitReached` | 32 — twice the observed median task ([ADR 0009](./adr/0009-policy-defaults.md) D51) |
+| context | tokens per projection | the host | the fold's accounting | — |
+| memory | the resident window | the host | R1 | 64 entries, decided, enforced when the journal windows ([ADR 0009](./adr/0009-policy-defaults.md) D52) |
 
 ---
 

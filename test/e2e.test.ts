@@ -554,3 +554,28 @@ describe("cancellation", () => {
 		expect(results[0]?.content[0]).toEqual({ type: "text", text: "contents of a.txt" });
 	});
 });
+
+describe("the host receives every entry the run produced", () => {
+	test("the last tool result reaches the host's transcript", async () => {
+		const script: readonly (readonly ProviderEvent[])[] = [
+			[
+				{ type: "tool_call_start", id: "c1", name: "read_file" },
+				{ type: "tool_arguments_delta", id: "c1", delta: '{"path":"a.txt"}' },
+				done("toolUse"),
+			],
+		];
+		const entries: { readonly message: AgentMessage }[] = [];
+		const run = runAgent(
+			config(1),
+			{ ...host(scriptedProvider(script)), append: (entry) => entries.push(entry) },
+			{ message: userMessage("read a.txt") },
+		);
+		for await (const _event of run) {
+			// drain
+		}
+		await run.result();
+
+		const roles = entries.map((entry) => entry.message.role);
+		expect(roles).toEqual(["user", "assistant", "toolResult"]);
+	});
+});
