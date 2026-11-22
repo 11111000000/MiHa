@@ -62,7 +62,7 @@ function config(turnLimit = 8, tools: readonly ToolDefinition[] = [readFile]): H
 
 /**
  * The host does not run tools: the driver does. The host owns the provider and the
- * permission hook, and that is all it needs to own.
+ * approve seam, and that is all it needs to own.
  */
 function host(callProvider: HarnessHost["callProvider"]): HarnessHost {
 	return { callProvider };

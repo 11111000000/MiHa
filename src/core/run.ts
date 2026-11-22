@@ -21,7 +21,6 @@
 
 import { validate } from "../schema/dialect.ts";
 import { assertNever } from "./exhaustive.ts";
-import type { BeforeToolCall } from "./permissions.ts";
 import {
 	assistantMessage,
 	emptyUsage,
@@ -55,7 +54,6 @@ export interface HarnessConfig {
 	readonly tools: ToolRegistry;
 	/** How many provider requests a run may make. A policy, not a law (ADR 0006 D32). */
 	readonly turnLimit: number;
-	readonly beforeToolCall?: BeforeToolCall;
 	readonly options?: Readonly<Record<string, unknown>>;
 }
 
@@ -360,12 +358,7 @@ function finaliseAssistant(
 	};
 
 	if (stopReason === "toolUse" && accumulator.calls.length > 0) {
-		const plan = planDispatch(
-			calls,
-			state.config.tools,
-			state.turn,
-			state.config.beforeToolCall,
-		);
+		const plan = planDispatch(calls, state.config.tools, state.turn);
 		outputs.push({ kind: "tool_plan", plan });
 		for (const group of plan.groups) {
 			for (const entry of group) {

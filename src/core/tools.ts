@@ -20,7 +20,6 @@
 import { validate, type ToolSchema } from "../schema/dialect.ts";
 import { parseJson } from "./json.ts";
 import { text, toolResultMessage, type ToolCallBlock, type ToolResult, type ToolResultMessage } from "./messages.ts";
-import type { BeforeToolCall } from "./permissions.ts";
 
 export interface ToolDefinition {
 	readonly name: string;
@@ -39,9 +38,9 @@ export interface ToolDefinition {
  * What a tool does.
  *
  * The tool receives the **validated arguments**, not the raw text: the core has already
- * parsed them, checked them against the tool's dialect and applied whatever the
- * permission hook decided — including a rewrite of the arguments. A tool that re-parsed
- * the text would run something the core never checked.
+ * parsed them and checked them against the tool's dialect. A rewrite of the arguments
+ * happens at the approve seam, in the driver, and is re-validated there (ADR 0008 D44);
+ * a tool that re-parsed the text would run something the core never checked.
  */
 export type ToolExecute = (
 	call: ToolCallBlock,
@@ -89,16 +88,17 @@ export interface ToolPlan {
 /**
  * Plans the execution of a batch of calls.
  *
- * A call is rejected when the tool is unknown, when its arguments do not parse, when
- * they do not validate against the tool's dialect, or when the host's permission hook
- * refuses it. A rejected call never runs (law M2 for the truncated case) and always
- * produces a result (law M1).
+ * A call is rejected when the tool is unknown, when its arguments do not parse, or when
+ * they do not validate against the tool's dialect. A rejected call never runs (law M2
+ * for the truncated case) and always produces a result (law M1).
+ *
+ * Permissions are not consulted here: policy is the host's, delivered asynchronously at
+ * the approve seam in the driver (ADR 0008 D44).
  */
 export function planDispatch(
 	calls: readonly ToolCallBlock[],
 	registry: ToolRegistry,
 	turn: number,
-	beforeToolCall?: BeforeToolCall,
 ): ToolPlan {
 	const groups: ToolCallPlan[][] = [];
 	const rejections: ToolResultMessage[] = [];
@@ -126,25 +126,7 @@ export function planDispatch(
 			rejections.push(reject(call, `${validated.error.path || "/"}: ${validated.error.message}`));
 			continue;
 		}
-		let args = validated.value as Record<string, unknown>;
-
-		if (beforeToolCall) {
-			const decision = beforeToolCall({ call, tool, args });
-			if (decision?.block) {
-				rejections.push(reject(call, decision.reason ?? "blocked by the host"));
-				continue;
-			}
-			if (decision?.args) {
-				const rewritten = validate(tool.parameters, decision.args);
-				if (!rewritten.ok) {
-					rejections.push(
-						reject(call, `host rewrote the arguments badly — ${rewritten.error.path || "/"}: ${rewritten.error.message}`),
-					);
-					continue;
-				}
-				args = rewritten.value as Record<string, unknown>;
-			}
-		}
+		const args = validated.value as Record<string, unknown>;
 
 		const plan: ToolCallPlan = { call, tool, args };
 		if (tool.concurrency === "exclusive") {

@@ -30,9 +30,47 @@ import {
 	type ProviderRequest,
 	type RunState,
 } from "./run.ts";
-import { failureResult, successResult, type ToolCallPlan, type ToolPlan } from "./tools.ts";
+import {
+	failureResult,
+	reject,
+	successResult,
+	type ToolCallPlan,
+	type ToolDefinition,
+	type ToolPlan,
+} from "./tools.ts";
+import { validate } from "../schema/dialect.ts";
+import type { ToolCallBlock } from "./messages.ts";
 import type { AgentMessage, ToolResult, ToolResultMessage } from "./messages.ts";
 import type { TranscriptEntry } from "./transcript.ts";
+
+/**
+ * What the host answers when the driver asks about a call (ADR 0008 D44).
+ *
+ * - `allow` — run the call as planned.
+ * - `deny` — refuse it. The reason reaches the model as an ordinary error result, so
+ *   it can tell the user what was refused and why.
+ * - `rewrite` — replace the arguments. The replacement is **re-validated**; a rewrite
+ *   that breaks the dialect is refused rather than run.
+ */
+export type ApproveDecision =
+	| { readonly kind: "allow" }
+	| { readonly kind: "deny"; readonly reason: string }
+	| { readonly kind: "rewrite"; readonly args: Readonly<Record<string, unknown>> };
+
+export interface ApproveContext {
+	readonly call: ToolCallBlock;
+	readonly tool: ToolDefinition;
+	/** The validated arguments, before a rewrite may narrow them. */
+	readonly args: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * The one permission seam. It is **asynchronous** because the host may have to ask a
+ * human, and asking a human is the core interaction of the applications this harness
+ * is for. There is no permission engine in MiHa: the policy belongs to the host, which
+ * already knows what its user allowed.
+ */
+export type Approve = (context: ApproveContext) => Promise<ApproveDecision>;
 
 export interface HarnessHost {
 	/** Performs one provider call and streams its events. */
@@ -42,6 +80,8 @@ export interface HarnessHost {
 	) => AsyncIterable<ProviderEvent>;
 	/** Persists a transcript entry. The host may stamp it with a time. */
 	readonly append?: (entry: TranscriptEntry) => void;
+	/** Asked before each tool runs. Absent means every planned tool runs. */
+	readonly approve?: Approve;
 }
 
 export interface RunOptions {
@@ -119,7 +159,7 @@ export function runAgent(
 					}
 					break;
 				case "tool_plan":
-					await runPlan(intent.plan, signal, (result) => {
+					await runPlan(intent.plan, signal, host.approve, (result) => {
 						apply({ kind: "tool_result", result });
 					}, (toolCallId, partial) => {
 						apply({ kind: "tool_progress", toolCallId, partial });
@@ -159,11 +199,12 @@ export function runAgent(
 async function runPlan(
 	plan: ToolPlan,
 	signal: AbortSignal,
+	approve: Approve | undefined,
 	accept: (result: ToolResultMessage) => void,
 	progress: (toolCallId: string, partial: ToolResult) => void,
 ): Promise<void> {
 	for (const group of plan.groups) {
-		await Promise.all(group.map((entry) => runOne(entry, signal, accept, progress)));
+		await Promise.all(group.map((entry) => runOne(entry, signal, approve, accept, progress)));
 	}
 }
 
@@ -171,21 +212,49 @@ async function runPlan(
  * Runs one call.
  *
  * The **driver** runs the tool, not the host. The host owns the tool's *policy* — the
- * permission hook, which the dispatch has already applied — and the *capabilities* the
- * tool may use. Running the tool here means the tool always receives the arguments the
- * dispatch validated, including any the hook rewrote. A throw becomes a result (M3).
+ * approve seam, awaited here, which may wait for a human — and the *capabilities* the
+ * tool may use. Running the tool here means the tool always receives arguments the core
+ * or the seam validated, never the raw text (ADR 0008 D44, D47). A throw becomes a
+ * result (M3).
  */
 async function runOne(
 	entry: ToolCallPlan,
 	signal: AbortSignal,
+	approve: Approve | undefined,
 	accept: (result: ToolResultMessage) => void,
 	progress: (toolCallId: string, partial: ToolResult) => void,
 ): Promise<void> {
+	let args = entry.args;
+
+	if (approve) {
+		let decision: ApproveDecision;
+		try {
+			decision = await approve({ call: entry.call, tool: entry.tool, args: entry.args });
+		} catch (error) {
+			accept(failureResult(entry.call, error));
+			return;
+		}
+		if (decision.kind === "deny") {
+			accept(reject(entry.call, decision.reason));
+			return;
+		}
+		if (decision.kind === "rewrite") {
+			const rewritten = validate(entry.tool.parameters, decision.args);
+			if (!rewritten.ok) {
+				accept(
+					reject(entry.call, `host rewrote the arguments badly — ${rewritten.error.path || "/"}: ${rewritten.error.message}`),
+				);
+				return;
+			}
+			args = rewritten.value as Record<string, unknown>;
+		}
+	}
+
 	let result: ToolResult;
 	try {
 		result = await entry.tool.execute(
 			entry.call,
-			entry.args,
+			args,
 			signal,
 			(partial) => progress(entry.call.id, partial),
 		);

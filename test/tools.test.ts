@@ -183,44 +183,6 @@ describe("policy T1 — grouping", () => {
 	});
 });
 
-describe("the permission seam", () => {
-	test("a blocked call becomes a result with the host's reason", () => {
-		const plan = planDispatch([call("1", "read_file", { path: "a" })], registry, 1, () => ({
-			block: true,
-			reason: "the user refused",
-		}));
-		expect(plan.groups).toHaveLength(0);
-		expect(onlyRejection(plan).content[0]).toEqual({ type: "text", text: "the user refused" });
-	});
-
-	test("the hook may narrow the arguments, and the narrowing is re-validated", () => {
-		const plan = planDispatch([call("1", "read_file", { path: "a" })], registry, 1, (context) => ({
-			args: { path: "safe.txt" },
-		}));
-		expect(plan.groups[0]?.[0]?.args).toEqual({ path: "safe.txt" });
-	});
-
-	test("a narrowing that breaks the schema is refused rather than run", () => {
-		const plan = planDispatch([call("1", "read_file", { path: "a" })], registry, 1, () => ({
-			args: { path: 42 },
-		}));
-		expect(plan.groups).toHaveLength(0);
-		expect(onlyRejection(plan).content[0]).toEqual({
-			type: "text",
-			text: expect.stringContaining("host rewrote the arguments badly"),
-		});
-	});
-
-	test("the hook sees the validated arguments", () => {
-		let seen: Readonly<Record<string, unknown>> | undefined;
-		planDispatch([call("1", "read_file", { path: "a" })], registry, 1, (context) => {
-			seen = context.args;
-			return undefined;
-		});
-		expect(seen).toEqual({ path: "a" });
-	});
-});
-
 describe("the registry", () => {
 	test("two tools with the same name are refused", () => {
 		expect(() => toolRegistry([readFile, { ...readFile }])).toThrow("duplicate tool name");
