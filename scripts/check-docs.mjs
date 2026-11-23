@@ -13,7 +13,7 @@
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { NAMED_LAYERS } from "./layers.mjs";
+import { LAYERS, NAMED_LAYERS } from "./layers.mjs";
 import { dirname, join, relative, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
@@ -229,6 +229,7 @@ function checkAttribution() {
 /* ------------------------------------------------------------------- layers */
 
 const LAYER_DECISION = "docs/adr/0002-core-harness.md";
+const BUDGET_DECISION = "docs/adr/0004-quality-bar.md";
 
 /**
  * The layers the architectural decision names.
@@ -260,19 +261,61 @@ function layersNamedByTheDecision() {
 	return named;
 }
 
+/**
+ * The layer budgets the architectural decision states.
+ *
+ * The decision is the source; the build enforces it. A number that drifts between
+ * them is a law that is not kept, so the check reads both and compares them.
+ */
+function budgetsDeclaredByTheDecision() {
+	const budgets = new Map();
+	const text = readFileSync(join(ROOT, BUDGET_DECISION), "utf8");
+	for (const line of text.split("\n")) {
+		const match = /^\|\s*`?([a-z]+)`?\s*\|\s*([0-9][0-9 ]*)\s*(?:LOC)?\s*\|\s*$/.exec(line);
+		if (!match) continue;
+		const layer = match[1];
+		if (!(layer in LAYERS)) continue;
+		budgets.set(layer, Number(match[2].replace(/ /g, "")));
+	}
+	return budgets;
+}
+
 function checkLayers() {
 	const named = layersNamedByTheDecision();
 	if (!named) {
-		fail("the architectural decision has no layer diagram to read");
+		fail(LAYER_DECISION, "the architectural decision has no layer diagram to read");
 		return;
 	}
 
 	const declared = new Set(NAMED_LAYERS);
 	for (const layer of named) {
-		if (!declared.has(layer)) fail(`the decision names the layer "${layer}", which has no declared budget`);
+		if (!declared.has(layer)) {
+			fail(LAYER_DECISION, `the decision names the layer "${layer}", which has no declared budget`);
+		}
 	}
 	for (const layer of declared) {
-		if (!named.has(layer)) fail(`the layer "${layer}" has a budget but the decision does not name it`);
+		if (!named.has(layer)) {
+			fail(LAYER_DECISION, `the layer "${layer}" has a budget but the decision does not name it`);
+		}
+	}
+
+	const budgets = budgetsDeclaredByTheDecision();
+	if (budgets.size === 0) {
+		fail(BUDGET_DECISION, "the budget decision states no layer budget the build could check");
+		return;
+	}
+	for (const [layer, budget] of budgets) {
+		const limit = LAYERS[layer];
+		if (limit === undefined) continue;
+		if (limit !== budget) {
+			fail(BUDGET_DECISION, `the decision budgets "${layer}" at ${budget} LOC, the build enforces ${limit}`);
+		}
+	}
+	for (const layer of Object.keys(LAYERS)) {
+		if (layer === "root") continue;
+		if (!budgets.has(layer)) {
+			fail(BUDGET_DECISION, `the decision declares no budget for the layer "${layer}"`);
+		}
 	}
 
 	const present = new Set();
@@ -280,7 +323,9 @@ function checkLayers() {
 		if (entry.isDirectory()) present.add(entry.name);
 	}
 	for (const layer of present) {
-		if (!declared.has(layer)) fail(`the source tree has the layer "${layer}", which has no declared budget`);
+		if (!declared.has(layer)) {
+			fail(join(ROOT, "src"), `the source tree has the layer "${layer}", which has no declared budget`);
+		}
 	}
 
 	console.log(`layers   ${[...declared].sort().join(", ")}`);

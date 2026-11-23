@@ -5,6 +5,7 @@ import type { HarnessConfig, ProviderRequest } from "../src/core/run.ts";
 import type { AgentEvent, ProviderEvent } from "../src/core/events.ts";
 import { toolRegistry, type ToolDefinition } from "../src/core/tools.ts";
 import {
+	assistantMessage,
 	toolResultMessage,
 	userMessage,
 	type AgentMessage,
@@ -607,5 +608,101 @@ describe("law M1 — a call id reused in a later batch is answered again", () =>
 
 		const answers = contextMessages(state.context).filter((message) => message.role === "toolResult");
 		expect(answers).toHaveLength(2);
+	});
+});
+
+describe("the refactoring's observable edges", () => {
+	test("the turn's results follow completion order, and they are the batch's own", async () => {
+		const script: readonly (readonly ProviderEvent[])[] = [
+			[
+				{ type: "tool_call_start", id: "c1", name: "read_file" },
+				{ type: "tool_arguments_delta", id: "c1", delta: '{"path":"a.txt"}' },
+				{ type: "tool_call_start", id: "c2", name: "read_file" },
+				{ type: "tool_arguments_delta", id: "c2", delta: '{"path":"b.txt"}' },
+				done("toolUse"),
+			],
+			[done("stop")],
+		];
+		const run = runAgent(config(), host(scriptedProvider(script)), {
+			message: userMessage("read both"),
+		});
+		const events: AgentEvent[] = [];
+		for await (const event of run) events.push(event);
+		await run.result();
+
+		const end = events.find((event) => event.type === "turn_end");
+		if (!end || end.type !== "turn_end") throw new Error("no turn_end");
+		const ids = end.toolResults.map((result) => result.toolCallId);
+		expect(new Set(ids)).toEqual(new Set(["c1", "c2"]));
+	});
+
+	test("an answer for a call the batch never made is ignored", async () => {
+		let state = step(initialState(config()), { kind: "prompt", message: userMessage("go") }).state;
+		for (const event of [
+			{ type: "tool_call_start", id: "c1", name: "read_file" },
+			{ type: "tool_arguments_delta", id: "c1", delta: '{"path":"a.txt"}' },
+			done("toolUse"),
+		] as ProviderEvent[]) {
+			state = step(state, { kind: "provider", event }).state;
+		}
+		const before = contextMessages(state.context).length;
+		state = step(state, {
+			kind: "tool_result",
+			result: toolResultMessage("cX", "read_file", [{ type: "text", text: "not ours" }], false),
+		}).state;
+		expect(contextMessages(state.context).length).toBe(before);
+
+		// The real answer still closes the batch.
+		state = step(state, {
+			kind: "tool_result",
+			result: toolResultMessage("c1", "read_file", [{ type: "text", text: "contents" }], false),
+		}).state;
+		const answers = contextMessages(state.context).filter((message) => message.role === "toolResult");
+		expect(answers).toHaveLength(1);
+	});
+
+	test("a cancelled answer keeps the failure it carried", async () => {
+		let state = step(initialState(config()), { kind: "prompt", message: userMessage("go") }).state;
+		for (const event of [
+			{ type: "tool_call_start", id: "c1", name: "read_file" },
+			{ type: "tool_call_start", id: "c2", name: "read_file" },
+			{ type: "tool_arguments_delta", id: "c1", delta: '{"path":"a.txt"}' },
+			{ type: "tool_arguments_delta", id: "c2", delta: '{"path":"b.txt"}' },
+			done("toolUse"),
+		] as ProviderEvent[]) {
+			state = step(state, { kind: "provider", event }).state;
+		}
+		// A failed answer the run holds but never wrote.
+		state = step(state, {
+			kind: "tool_result",
+			result: toolResultMessage("c1", "read_file", [{ type: "text", text: "the disk is on fire" }], true),
+		}).state;
+		state = step(state, { kind: "cancel" }).state;
+
+		const answers = contextMessages(state.context).filter((message) => message.role === "toolResult");
+		expect(answers).toHaveLength(2);
+		const failed = answers.find((answer) => answer.role === "toolResult" && answer.toolCallId === "c1");
+		expect(failed?.role === "toolResult" ? failed.isError : false).toBe(true);
+	});
+
+	test("a prompt that is not a user message is recorded as it is", async () => {
+		const entries: JournalEntry[] = [];
+		const run = runAgent(
+			config(),
+			{
+				...host(scriptedProvider([[done("stop")]])),
+				append: (entry) => entries.push(entry),
+			},
+			{ message: assistantMessage([{ type: "text", text: "I am the prompt" }], "stop") },
+		);
+		const events: AgentEvent[] = [];
+		for await (const event of run) events.push(event);
+		await run.result();
+
+		const start = events.find((event) => event.type === "message_start");
+		if (!start || start.type !== "message_start") throw new Error("no message_start");
+		const entry = entries[0];
+		expect(entry?.kind).toBe("message");
+		expect(start.role).toBe("assistant");
 	});
 });

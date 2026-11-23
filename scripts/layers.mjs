@@ -13,8 +13,8 @@ export const LAYERS = {
 	root: 50,
 	/** The tool-parameter dialect: types, validation, conversion. */
 	schema: 500,
-	/** The algebras, the tool contract and dispatch, the transcript, the state machine, the driver. */
-	core: 1500,
+	/** The algebras, the tool contract and dispatch, the journal, the state machine, the driver. */
+	core: 2500,
 	/** Provider adapters: the SSE reader, the call tracker, the wire formats. */
 	llm: 600,
 	/** The peer protocol and its transports. */

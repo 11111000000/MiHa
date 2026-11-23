@@ -168,21 +168,25 @@ function write(
 }
 
 /**
- * A prompt's content, as the journal holds it: text or blocks, never a tool call.
+ * A prompt, as the journal holds it.
  *
- * The journal's `message` entry with the role `user` carries what the user said. A
- * prompt that is not a user message is narrowed to what can be said.
+ * The prompt is recorded as it is — the role it carries and the content it holds —
+ * so the record and the live event say the same thing. A prompt that is not a user
+ * message is narrowed to what can be said: text and images, never a tool call.
  */
-function promptContent(
-	message: AgentMessage,
-): string | readonly (TextContent | ImageContent)[] {
-	if (message.role === "user") return message.content;
+function promptBody(message: AgentMessage): JournalBody {
 	if (message.role === "assistant") {
-		return message.content.filter(
-			(block): block is TextContent | ImageContent => block.type === "text" || block.type === "image",
-		);
+		return {
+			kind: "message",
+			role: "assistant",
+			content: message.content.filter(
+				(block): block is TextContent | ImageContent => block.type === "text" || block.type === "image",
+			),
+			usage: message.usage,
+			stopReason: message.stopReason,
+		};
 	}
-	return message.content;
+	return { kind: "message", role: "user", content: message.content };
 }
 
 /** A call being accumulated while the provider streams it. */
@@ -284,14 +288,8 @@ export function step(state: RunState, input: Input): Step {
 
 function startRun(state: RunState, message: AgentMessage): Step {
 	const outputs: Output[] = [{ kind: "event", event: { type: "agent_start" } }];
-	const { entry, state: written } = write(
-		state,
-		{ kind: "message", role: "user", content: promptContent(message) },
-		outputs,
-	);
-	const id = `m${entry.seq}`;
-	outputs.push({ kind: "event", event: { type: "message_start", id, role: "user" } });
-	outputs.push({ kind: "event", event: { type: "message_end", id, message } });
+	const { entry, state: written } = write(state, promptBody(message), outputs);
+	announce(outputs, `m${entry.seq}`, message);
 
 	const next: RunState = { ...written, phase: "requesting", turn: 1 };
 	return beginTurn(next, outputs);
@@ -610,35 +608,49 @@ function applyToolProgress(state: RunState, toolCallId: string, partial: ToolRes
  * error result rather than a hole in the transcript (law M1).
  */
 function flushResults(state: RunState, outputs: Output[]): RunState {
-	const ordered = state.calls.map(
-		(call) =>
-			state.results.find((result) => result.toolCallId === call.id) ??
-			budgeted(state, syntheticResult(call, "no result")),
-	);
-
 	let written = state;
 
-	for (const result of ordered) {
-		const refusal = state.blocks.find((block) => block.callId === result.toolCallId);
-		const body: JournalBody = refusal
-			? { kind: "block", callId: result.toolCallId, name: result.toolName, reason: refusal.reason }
-			: {
-					kind: "tool_result",
-					callId: result.toolCallId,
-					name: result.toolName,
-					content: result.content,
-					isError: result.isError,
-					...(result.details === undefined ? {} : { details: result.details }),
-				};
-		const { entry, state: next } = write(written, body, outputs);
-		written = next;
-		const id = `m${entry.seq}`;
-		outputs.push({ kind: "event", event: { type: "message_start", id, role: "toolResult" } });
-		outputs.push({ kind: "event", event: { type: "message_end", id, message: result } });
+	for (const call of state.calls) {
+		const result =
+			state.results.find((candidate) => candidate.toolCallId === call.id) ??
+			budgeted(state, syntheticResult(call, "no result"));
+		written = writeAnswer(written, call, result, state.blocks, outputs);
 	}
 
-	const writtenIds = [...state.written, ...ordered.map((result) => result.toolCallId)];
-	return { ...written, phase: "settling", results: ordered, written: writtenIds };
+	const writtenIds = [...state.written, ...state.calls.map((call) => call.id)];
+	return { ...written, phase: "settling", results: state.results, written: writtenIds };
+}
+
+/**
+ * Writes one answer into the log and tells the interface about it.
+ *
+ * The one place an answer becomes an entry: a refusal is a `block` entry, everything
+ * else a `tool_result` entry, and both reach the model as one message. The refusal
+ * and the answer travel the same road, so they cannot drift apart.
+ */
+function writeAnswer(
+	state: RunState,
+	call: { readonly id: string; readonly name: string },
+	result: ToolResultMessage,
+	blocks: readonly BlockInfo[],
+	outputs: Output[],
+): RunState {
+	const refusal = blocks.find((block) => block.callId === call.id);
+	const body: JournalBody = refusal
+		? { kind: "block", callId: call.id, name: call.name, reason: refusal.reason }
+		: {
+				kind: "tool_result",
+				callId: call.id,
+				name: call.name,
+				content: result.content,
+				isError: result.isError,
+				...(result.details === undefined ? {} : { details: result.details }),
+			};
+	const { entry, state: written } = write(state, body, outputs);
+	const id = `m${entry.seq}`;
+	outputs.push({ kind: "event", event: { type: "message_start", id, role: "toolResult" } });
+	outputs.push({ kind: "event", event: { type: "message_end", id, message: result } });
+	return written;
 }
 
 /**
@@ -650,6 +662,9 @@ function flushResults(state: RunState, outputs: Output[]): RunState {
  */
 function applyToolResult(state: RunState, incoming: ToolResultMessage): Step {
 	if (state.phase !== "dispatching") return { state, outputs: [] };
+	// An answer for a call this batch never made is not an answer to it: counting it
+	// would make the batch look finished while a call of ours waits (law M1).
+	if (!state.calls.some((call) => call.id === incoming.toolCallId)) return { state, outputs: [] };
 
 	const result = budgeted(state, incoming);
 	const results = replaceAnswer(state.results, result);
@@ -760,6 +775,16 @@ function replaceAnswer(
 	return next;
 }
 
+/**
+ * Tells the interface that a message entered the conversation.
+ *
+ * The live view follows the run: a message starts and ends, and the host sees both.
+ */
+function announce(outputs: Output[], id: string, message: AgentMessage): void {
+	outputs.push({ kind: "event", event: { type: "message_start", id, role: message.role } });
+	outputs.push({ kind: "event", event: { type: "message_end", id, message } });
+}
+
 /** A call that never ran still gets an answer (law M1). */
 function syntheticResult(call: AccumulatedCall, reason: string): ToolResultMessage {
 	return toolResultMessage(call.id, call.name, [{ type: "text", text: reason }], true);
@@ -787,14 +812,8 @@ function endTurn(state: RunState, outputs: Output[], hadToolCalls: boolean): Ste
 		const next = state.queued[0];
 		if (next === undefined) return finish(state, { kind: "completed" }, outputs);
 		const rest = state.queued.slice(1);
-		const { entry, state: written } = write(
-			state,
-			{ kind: "message", role: "user", content: promptContent(next) },
-			outputs,
-		);
-		const id = `m${entry.seq}`;
-		outputs.push({ kind: "event", event: { type: "message_start", id, role: "user" } });
-		outputs.push({ kind: "event", event: { type: "message_end", id, message: next } });
+		const { entry, state: written } = write(state, promptBody(next), outputs);
+		announce(outputs, `m${entry.seq}`, next);
 		const prepared: RunState = {
 			...written,
 			phase: "requesting",
@@ -838,22 +857,8 @@ function cancelRun(state: RunState): Step {
 		// written now, or the call would be a hole in the log.
 		if (state.written.includes(call.id)) continue;
 		const buffered = state.results.find((result) => result.toolCallId === call.id);
-		const refusal = state.blocks.find((block) => block.callId === call.id);
 		const result = buffered ?? budgeted(state, syntheticResult(call, "cancelled"));
-		const body: JournalBody = refusal
-			? { kind: "block", callId: call.id, name: call.name, reason: refusal.reason }
-			: {
-					kind: "tool_result",
-					callId: call.id,
-					name: call.name,
-					content: result.content,
-					isError: buffered === undefined,
-				};
-		const { entry, state: next } = write(written, body, outputs);
-		written = next;
-		const id = `m${entry.seq}`;
-		outputs.push({ kind: "event", event: { type: "message_start", id, role: "toolResult" } });
-		outputs.push({ kind: "event", event: { type: "message_end", id, message: result } });
+		written = writeAnswer(written, call, result, state.blocks, outputs);
 	}
 
 	const finished: RunState = { ...written, phase: "finished" };

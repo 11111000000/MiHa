@@ -53,16 +53,63 @@ Three budgets, all checked in CI, all failures of the build:
 | Budget | Limit | What it covers |
 |---|---|---|
 | **Bundle** | **≤ 30 000 B gzip**, browser target, minified | the core together with the provider layer — what an application that uses both loads |
-| **Layer** | per-layer file counts and code LOC | `core` 1 500 LOC, `schema` 500, `llm` 600, `exchange` 700, `worker` 500, `trace` 400 |
+| **Layer** | per-layer code LOC | the table below |
 | **Dependency** | **zero** runtime dependencies | the core imports nothing from npm |
+
+| Layer | Budget |
+|---|---|
+| `core` | 2500 |
+| `schema` | 500 |
+| `llm` | 600 |
+| `exchange` | 700 |
+| `worker` | 500 |
+| `trace` | 250 |
+| `ui` | 800 |
 
 The layer budget is expressed in LOC rather than bytes because a byte budget is gamed by
 minification, while a LOC budget tracks how much code the browser must evaluate — the
 thing that actually costs. The byte budget stays as the outer wall.
 
-The layer budgets are the sums of the module budgets in
-[ADR 0005](./0005-core-harness.md) D32, so the two cannot drift apart. Exceeding one
-means a module is split or a feature is cut — not that the budget is raised.
+The layer budgets bound the modules of
+[ADR 0005](./0005-core-harness.md) D32; the planned module figures there are estimates,
+and the layer ceiling is the law. `scripts/check-docs.mjs` reads this table and
+`scripts/layers.mjs` and compares them: a number that drifts between the decision and
+the build is a law that is not kept. Exceeding a ceiling means a module is split or a
+feature is cut — unless the owner changes the ceiling on purpose, as below.
+
+**Amendment, 2026-11-23 (owner).** `core` was 1 500 LOC; it is now **2 500**.
+
+The rule above says that exceeding a budget means splitting a module or cutting a
+feature, not raising the budget. That rule exists to stop the budget from drifting
+with the work — and this is a deliberate, measured change, made once, with the
+measurement attached, not a drift. What happened: the core was 1 010 lines when the
+budget was set. The journal, the fold, the resident window, the asynchronous approval
+seam and the result budget added 459 lines of machinery, each with a law and a claim —
+the core grew from 1 010 to 1 469 lines. A refactoring pass then took 36 of them back
+(the answers are written in one place now, and the driver takes a context instead of
+seven parameters), leaving **1 433**.
+
+What the ceiling buys: the remaining core work — the compaction policy that bounds the
+folded context, the phase derived rather than stored (D48), the context budget — fits
+without asking again. What it does not buy: the byte ceiling stays at 30 000 B gzip,
+the laws stay, the claim discipline stays, and a feature that does not earn its lines
+is still cut. The budget is a ceiling, not a target.
+
+**What the refactoring changed, said out loud.** A refactoring that changes what the
+host sees is not a refactoring, and a discriminator found six such changes, all of
+them now pinned by tests:
+
+- the turn's results in the live event follow **completion order**, while the journal
+  keeps the assistant order (law T4) — the two are different views, and the live one
+  was always meant to follow completion;
+- an answer for a call the batch never made is **ignored** rather than counted, so a
+  foreign answer cannot make a batch look finished;
+- a cancelled answer now carries the failure it held (`isError`), which is law M3
+  rather than a convenience;
+- a cancelled answer keeps the `details` the tool returned;
+- the journal names the **call** a result answers, so the record and the pairing agree;
+- the prompt is recorded with the role it carries, so the record and the live event
+  say the same thing.
 
 ### D20. Our own tool-parameter schema dialect, exact by construction
 

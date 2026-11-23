@@ -318,20 +318,20 @@ the run.
 
 | Module | Planned | Built | Holds |
 |---|---|---|---|
-| `core/transcript.ts` | 300 | **19** | append-only entries and the projection. Far below the estimate: an append-only log needs almost no code |
-| `core/run.ts` | 350 | **441** | the state machine and `step` |
-| `core/loop.ts` | 200 | **126** | the driver: performs intents, feeds inputs |
-| `core/tools.ts` | 250 | **114** | the contract, the registry, validation, dispatch planning |
-| `core/permissions.ts` | 80 | **15** | the `beforeToolCall` seam |
-| `core/events.ts` | 60 | **60** | the two vocabularies |
+| `core/journal.ts` | — | **220** | the journal: six kinds of durable event, the envelope, the fold. It replaced `core/transcript.ts` (19 lines), which was a message list and not a log |
+| `core/run.ts` | 350 | **620** | the state machine and `step` |
+| `core/loop.ts` | 200 | **194** | the driver: performs intents, feeds inputs, awaits the approval |
+| `core/tools.ts` | 250 | **96** | the contract, the registry, validation, dispatch planning |
+| `core/budget.ts` | — | **53** | the result budget: the seam every result crosses |
+| `core/events.ts` | 60 | **60** | the live vocabulary and the provider's |
 | `core/messages.ts` | 110 | **87** | the message algebra, without timestamps — the core has no clock |
 | `core/event-stream.ts` | 110 | **77** | the stream and its laws |
 | `core/json.ts` | — | **10** | parsing that cannot throw |
 | `schema/` | 260 | **258** | the dialect and its validator |
-| `llm/` | 600 | **306** | the SSE reader, the call tracker, the OpenAI-compatible adapter |
-| `exchange/` | 700 | **234** | the peer protocol, the delegating side and the event queue. The receiving side is still to come |
-| `worker/` | 500 | **175** | the capability bridge and the host that owns the worker |
-| `trace/` | 250 | — | the run record and record/replay — the transcript itself is the trace |
+| `llm/` | 600 | **313** | the SSE reader, the call tracker, the OpenAI-compatible adapter |
+| `exchange/` | 700 | **151** | the peer protocol, the delegating side and the event queue. The receiving side is still to come |
+| `worker/` | 500 | **181** | the capability bridge and the host that owns the worker |
+| `trace/` | 250 | — | the run record and record/replay — the journal itself is the trace |
 | `ui/` | 800 | — | the registry, the spec, the patches |
 
 The built column is the count of code lines: not blank, and not starting with a comment
@@ -339,8 +339,11 @@ marker. It is measured by `scripts/check-budget.mjs`, which is also what enforce
 budgets.
 
 Two modules came out far below their estimate — the transcript and the permission seam —
-and one above: the state machine. An append-only log needs almost no code, which is
-the point of choosing it; the state machine is where the laws live, and laws cost.
+and two above: the state machine and, after it, the journal. An append-only log needs
+almost no code, which is the point of choosing it; the state machine is where the laws
+live, and laws cost. The journal came above because a log of *events* is not a list of
+messages: the fold that projects it, the window that bounds it and the three ways the
+host's policy enters it are the price of the projection being honest.
 
 Every module is a layer in ADR 0002 D1's diagram. `core` imports `protocol` and
 nothing else; the layers below it never import upward.

@@ -160,20 +160,19 @@ export function runAgent(
 					}
 					break;
 				case "tool_plan":
-					await runPlan(
-						intent.plan,
+					await runPlan(intent.plan, {
 						signal,
-						host.approve,
-						(result) => {
+						approve: host.approve,
+						accept: (result) => {
 							apply({ kind: "tool_result", result });
 						},
-						(call, reason) => {
+						block: (call, reason) => {
 							apply({ kind: "blocked", call, reason });
 						},
-						(toolCallId, partial) => {
+						progress: (toolCallId, partial) => {
 							apply({ kind: "tool_progress", toolCallId, partial });
 						},
-					);
+					});
 					break;
 			}
 		}
@@ -219,22 +218,29 @@ export function runAgent(
 }
 
 /**
+ * What the driver needs to run a plan.
+ *
+ * The signal, the host's approval, and the three ways back into the core: an
+ * answer, a refusal, a partial result.
+ */
+interface PlanContext {
+	readonly signal: AbortSignal;
+	readonly approve: Approve | undefined;
+	readonly accept: (result: ToolResultMessage) => void;
+	readonly block: (call: ToolCallBlock, reason: string) => void;
+	readonly progress: (toolCallId: string, partial: ToolResult) => void;
+}
+
+/**
  * Executes a plan.
  *
  * Groups run in order; within a group the calls run together. The results are fed
  * back as they arrive, so the live view follows completion order while the core
  * records them in assistant order (law T4).
  */
-async function runPlan(
-	plan: ToolPlan,
-	signal: AbortSignal,
-	approve: Approve | undefined,
-	accept: (result: ToolResultMessage) => void,
-	block: (call: ToolCallBlock, reason: string) => void,
-	progress: (toolCallId: string, partial: ToolResult) => void,
-): Promise<void> {
+async function runPlan(plan: ToolPlan, context: PlanContext): Promise<void> {
 	for (const group of plan.groups) {
-		await Promise.all(group.map((entry) => runOne(entry, signal, approve, accept, block, progress)));
+		await Promise.all(group.map((entry) => runOne(entry, context)));
 	}
 }
 
@@ -247,14 +253,8 @@ async function runPlan(
  * or the seam validated, never the raw text (ADR 0008 D44, D47). A throw becomes a
  * result (M3).
  */
-async function runOne(
-	entry: ToolCallPlan,
-	signal: AbortSignal,
-	approve: Approve | undefined,
-	accept: (result: ToolResultMessage) => void,
-	block: (call: ToolCallBlock, reason: string) => void,
-	progress: (toolCallId: string, partial: ToolResult) => void,
-): Promise<void> {
+async function runOne(entry: ToolCallPlan, context: PlanContext): Promise<void> {
+	const { signal, approve, accept, block, progress } = context;
 	let args = entry.args;
 
 	if (approve) {
@@ -284,12 +284,7 @@ async function runOne(
 
 	let result: ToolResult;
 	try {
-		result = await entry.tool.execute(
-			entry.call,
-			args,
-			signal,
-			(partial) => progress(entry.call.id, partial),
-		);
+		result = await entry.tool.execute(entry.call, args, signal, (partial) => progress(entry.call.id, partial));
 	} catch (error) {
 		accept(failureResult(entry.call, error));
 		return;

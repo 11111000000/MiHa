@@ -21,6 +21,7 @@ echo "── documents ───────────────────
 bun scripts/check-docs.mjs links
 bun scripts/check-docs.mjs decisions
 bun scripts/check-docs.mjs attribution
+bun scripts/check-docs.mjs layers
 
 echo "── tests ───────────────────────────────────────────────"
 bun test

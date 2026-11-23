@@ -65,63 +65,78 @@ export interface JournalEnvelope {
 	readonly version: number;
 }
 
-export type JournalEntry =
-	| (JournalEnvelope & {
-			readonly kind: "message";
-			readonly role: "user";
-			readonly content: string | readonly (TextContent | ImageContent)[];
-	  })
-	| (JournalEnvelope & {
-			readonly kind: "message";
-			readonly role: "assistant";
-			readonly content: readonly (TextContent | ImageContent | ThinkingContent)[];
-			readonly usage: Usage;
-			readonly stopReason: StopReason;
-			readonly errorMessage?: string;
-	  })
-	| (JournalEnvelope & {
-			readonly kind: "tool_call";
-			readonly callId: string;
-			readonly name: string;
-			readonly argumentsText: string;
-	  })
-	| (JournalEnvelope & {
-			readonly kind: "tool_result";
-			readonly callId: string;
-			readonly name: string;
-			readonly content: readonly (TextContent | ImageContent)[];
-			readonly isError: boolean;
-			readonly details?: unknown;
-	  })
-	| (JournalEnvelope & {
-			readonly kind: "compaction";
-			/** The first entry that survives; everything before it folds into the summary. */
-			readonly firstKeptSeq: number;
-			readonly summary: string;
-			readonly dropped: number;
-	  })
-	| (JournalEnvelope & {
-			readonly kind: "change";
-			/** The entry whose model-facing view is replaced. */
-			readonly targetSeq: number;
-			readonly content: readonly (TextContent | ImageContent)[];
-	  })
-	| (JournalEnvelope & {
-			readonly kind: "block";
-			readonly callId: string;
-			readonly name: string;
-			readonly reason: string;
-	  });
+/** What the user said. */
+export interface UserBody {
+	readonly kind: "message";
+	readonly role: "user";
+	readonly content: string | readonly (TextContent | ImageContent)[];
+}
+
+/** What the assistant said, apart from the calls it asked for. */
+export interface AssistantBody {
+	readonly kind: "message";
+	readonly role: "assistant";
+	readonly content: readonly (TextContent | ImageContent | ThinkingContent)[];
+	readonly usage: Usage;
+	readonly stopReason: StopReason;
+	readonly errorMessage?: string;
+}
+
+/** What the model asked for. */
+export interface ToolCallBody {
+	readonly kind: "tool_call";
+	readonly callId: string;
+	readonly name: string;
+	readonly argumentsText: string;
+}
+
+/** What the tool answered. */
+export interface ToolResultBody {
+	readonly kind: "tool_result";
+	readonly callId: string;
+	readonly name: string;
+	readonly content: readonly (TextContent | ImageContent)[];
+	readonly isError: boolean;
+	readonly details?: unknown;
+}
+
+/** A range of the log collapsed into a summary. */
+export interface CompactionBody {
+	readonly kind: "compaction";
+	/** The first entry that survives; everything before it folds into the summary. */
+	readonly firstKeptSeq: number;
+	readonly summary: string;
+	readonly dropped: number;
+}
+
+/** An earlier entry's model-facing view replaced. */
+export interface ChangeBody {
+	readonly kind: "change";
+	/** The entry whose model-facing view is replaced. */
+	readonly targetSeq: number;
+	readonly content: readonly (TextContent | ImageContent)[];
+}
+
+/** A call the host refused, and why. */
+export interface BlockBody {
+	readonly kind: "block";
+	readonly callId: string;
+	readonly name: string;
+	readonly reason: string;
+}
 
 /** The journal body: an entry without its envelope. */
 export type JournalBody =
-	| Omit<Extract<JournalEntry, { kind: "message"; role: "user" }>, keyof JournalEnvelope>
-	| Omit<Extract<JournalEntry, { kind: "message"; role: "assistant" }>, keyof JournalEnvelope>
-	| Omit<Extract<JournalEntry, { kind: "tool_call" }>, keyof JournalEnvelope>
-	| Omit<Extract<JournalEntry, { kind: "tool_result" }>, keyof JournalEnvelope>
-	| Omit<Extract<JournalEntry, { kind: "compaction" }>, keyof JournalEnvelope>
-	| Omit<Extract<JournalEntry, { kind: "change" }>, keyof JournalEnvelope>
-	| Omit<Extract<JournalEntry, { kind: "block" }>, keyof JournalEnvelope>;
+	| UserBody
+	| AssistantBody
+	| ToolCallBody
+	| ToolResultBody
+	| CompactionBody
+	| ChangeBody
+	| BlockBody;
+
+/** A body with its envelope: the entry as the log holds it. */
+export type JournalEntry = JournalBody & JournalEnvelope;
 
 /**
  * One message in the context, and the entries it came from.
@@ -155,6 +170,29 @@ export interface ContextState {
 
 export function initialContextState(): ContextState {
 	return { items: [], openAssistant: undefined, pending: [] };
+}
+
+/**
+ * One message in the context.
+ *
+ * `seqs` holds the entries the message absorbed — its own and the calls that joined
+ * it — and `calls` their ids.
+ */
+function item(
+	seq: number,
+	message: AgentMessage,
+	calls: readonly string[] = [],
+): ContextItem {
+	return { seq, seqs: [seq], calls, message };
+}
+
+/** The folded state after one entry. */
+function folded(
+	items: readonly ContextItem[],
+	openAssistant: number | undefined,
+	pending: readonly string[],
+): ContextState {
+	return { items, openAssistant, pending };
 }
 
 /**
@@ -215,14 +253,11 @@ export function foldContext(state: ContextState, entry: JournalEntry): ContextSt
 	switch (entry.kind) {
 		case "message": {
 			if (entry.role === "user") {
-				return {
-					items: [
-						...state.items,
-						{ seq: entry.seq, seqs: [entry.seq], calls: [], message: { role: "user", content: entry.content } },
-					],
-					openAssistant: undefined,
-					pending: state.pending,
-				};
+				return folded(
+					[...state.items, item(entry.seq, { role: "user", content: entry.content })],
+					undefined,
+					state.pending,
+				);
 			}
 			const message = assistantMessage(
 				entry.content,
@@ -230,11 +265,7 @@ export function foldContext(state: ContextState, entry: JournalEntry): ContextSt
 				entry.usage,
 				entry.errorMessage,
 			);
-			return {
-				items: [...state.items, { seq: entry.seq, seqs: [entry.seq], calls: [], message }],
-				openAssistant: entry.seq,
-				pending: state.pending,
-			};
+			return folded([...state.items, item(entry.seq, message)], entry.seq, state.pending);
 		}
 		case "tool_call": {
 			const block = toolCall(entry.callId, entry.name, entry.argumentsText);
@@ -248,23 +279,16 @@ export function foldContext(state: ContextState, entry: JournalEntry): ContextSt
 					calls: [...open.calls, entry.callId],
 					message: { ...open.message, content: [...open.message.content, block] },
 				};
-				return {
-					items,
-					openAssistant: state.openAssistant,
-					pending: [...state.pending, entry.callId],
-				};
+				return folded(items, state.openAssistant, [...state.pending, entry.callId]);
 			}
 			// A call with no message to join starts one — the model asked, and the
 			// request is what it asked.
 			const message = assistantMessage([block], "toolUse");
-			return {
-				items: [
-					...state.items,
-					{ seq: entry.seq, seqs: [entry.seq], calls: [entry.callId], message },
-				],
-				openAssistant: entry.seq,
-				pending: [...state.pending, entry.callId],
-			};
+			return folded(
+				[...state.items, item(entry.seq, message, [entry.callId])],
+				entry.seq,
+				[...state.pending, entry.callId],
+			);
 		}
 		case "tool_result": {
 			const message = toolResultMessage(
@@ -275,11 +299,7 @@ export function foldContext(state: ContextState, entry: JournalEntry): ContextSt
 				entry.details,
 			);
 			const recorded = answer(state, entry.seq, entry.callId, message);
-			return {
-				items: recorded.items,
-				openAssistant: undefined,
-				pending: recorded.pending,
-			};
+			return folded(recorded.items, undefined, recorded.pending);
 		}
 		case "block": {
 			// The refusal is the model's answer: it reads why, and it recovers.
@@ -290,11 +310,7 @@ export function foldContext(state: ContextState, entry: JournalEntry): ContextSt
 				true,
 			);
 			const recorded = answer(state, entry.seq, entry.callId, message);
-			return {
-				items: recorded.items,
-				openAssistant: undefined,
-				pending: recorded.pending,
-			};
+			return folded(recorded.items, undefined, recorded.pending);
 		}
 		case "compaction": {
 			// The range collapses into the summary. An item survives when it begins
@@ -308,19 +324,10 @@ export function foldContext(state: ContextState, entry: JournalEntry): ContextSt
 					item.seq >= entry.firstKeptSeq &&
 					!(item.message.role === "toolResult" && orphans.has(item.message.toolCallId)),
 			);
-			const summary: ContextItem = {
-				seq: entry.seq,
-				seqs: [entry.seq],
-				calls: [],
-				message: { role: "user", content: `[compacted] ${entry.summary}` },
-			};
+			const summary = item(entry.seq, { role: "user", content: `[compacted] ${entry.summary}` });
 			const open = state.openAssistant;
-			const survives = open !== undefined && kept.some((item) => item.seq === open);
-			return {
-				items: [summary, ...kept],
-				openAssistant: survives ? open : undefined,
-				pending: state.pending,
-			};
+			const survives = open !== undefined && kept.some((candidate) => candidate.seq === open);
+			return folded([summary, ...kept], survives ? open : undefined, state.pending);
 		}
 		case "change": {
 			// The model-facing view is replaced; the entry in the log is not. The
@@ -331,7 +338,7 @@ export function foldContext(state: ContextState, entry: JournalEntry): ContextSt
 					? { ...item, message: withContent(item.message, entry.content) }
 					: item,
 			);
-			return { items, openAssistant: state.openAssistant, pending: state.pending };
+			return folded(items, state.openAssistant, state.pending);
 		}
 	}
 }
