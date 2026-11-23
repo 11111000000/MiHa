@@ -116,8 +116,13 @@ export function runAgent(
 		const result = step(state, input);
 		state = result.state;
 		for (const output of result.outputs) {
-			if (output.kind === "event") stream.push(output.event);
-			else intents.push(output);
+			if (output.kind === "event") {
+				// The run ends with the terminal event, and the host must have the
+				// last entries before it: a consumer that closes on the terminal
+				// event would otherwise lose them.
+				if (output.event.type === "agent_end") flushEntries();
+				stream.push(output.event);
+			} else intents.push(output);
 		}
 	};
 

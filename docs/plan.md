@@ -170,12 +170,16 @@ settled only after a discriminator has tried to break it — see
 [docs/discriminator.md](./discriminator.md).
 
 
-### 8. The peer exchange — **the delegating side is done**
+### 8. The peer exchange — **done, both sides**
 
-`src/exchange/` — the frames, the delegating side and the event queue. The frontend
-offers a task; the backend's events arrive in order; a call the backend makes runs
-through the frontend's own dispatch, so the arguments are validated against the tool's
-dialect and the frontend's permission hook applies to it.
+`src/exchange/` — the frames, the delegating side, the **receiving side** and the entry
+queue. The frontend offers a task; the backend's entries arrive in order. The receiving
+side accepts a task, refuses one it will not take (and says why), runs it with **its
+own** tools, sends the run's journal entries back as they are written, and ends with
+the run's own outcome ([ADR 0011](./adr/0011-receiving-side.md)).
+
+The wire carries the journal, not the live events: a delegated task is a fact in a
+log, not a fact in a frame (ADR 0008 D45, D49).
 
 Proven by: the claim `exchange-delegate-laws` — the offer is sent once, every event the
 peer sends is forwarded in order, an unregistered tool is answered with a failure rather
@@ -188,12 +192,15 @@ Still to do: the **receiving side** — the side that accepts a task, runs its o
 on it, and calls back. The protocol is symmetric, so that side is this code read from
 the other end.
 
-### 9. The trace and record/replay
+### 9. The trace and record/replay — **the cassette is done**
 
-`src/trace/` — the run record, the cassette, the replay mode. The transcript itself is
-the trace: no second format ([ADR 0008](./adr/0008-final-architecture.md) D46);
-the cassette records only what the journal cannot — the provider's responses, keyed by
-request hash.
+`src/trace/` — the cassette: the provider's responses under the hash of the request
+that asked for them, and the replay mode ([ADR 0012](./adr/0012-cassette.md)). The
+journal itself is the trace: no second format ([ADR 0008](./adr/0008-final-architecture.md)
+D46); the cassette records only what the journal cannot.
+
+A request the recording does not hold is a **divergence**, and it is reported with the
+request that diverged.
 
 Proven by: a recorded run replays to the same transcript; a diverging run is reported
 as a divergence with the first differing input.

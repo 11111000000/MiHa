@@ -128,7 +128,18 @@ The only effectful part. For each intent:
 It races the cancellation throughout: an aborted signal ends the run at the next
 boundary with every in-flight call answered.
 
-### 2.5 The host surface — seven hooks, and nothing else
+### 2.5 The peer, on both sides
+
+The exchange is symmetric: the delegating side offers a task, and the **receiving
+side** accepts it, runs it with **its own** tools, and sends the run's journal
+entries back as they are written ([ADR 0011](./adr/0011-receiving-side.md)). A peer
+gets a task, never a callable handle.
+
+A **cassette** records the provider's responses under the hash of the request that
+asked for them, and replays a run without a network ([ADR 0012](./adr/0012-cassette.md)).
+The journal is the trace; the cassette holds only what the journal cannot.
+
+### 2.6 The host surface — seven hooks, and nothing else
 
 | Hook | The host provides | May not |
 |---|---|---|
@@ -215,9 +226,9 @@ the context, one result — are all bounded by a number.
 | `core/` | the journal, the projection, the state machine, the driver, the tool contract | 1 006 | ~1 300 |
 | `schema/` | the tool-parameter dialect | 258 | 258 |
 | `llm/` | the SSE reader, the call tracker, one adapter | 313 | ~450 |
-| `exchange/` | the peer protocol, both directions | 151 | ~350 |
+| `exchange/` | the peer protocol, both directions | 279 | ~350 |
 | `worker/` | the capability bridge, the realm host | 181 | ~250 |
-| `trace/` | the cassette — the provider responses only | — | ~150 |
+| `trace/` | the cassette — the provider responses only | 158 | ~180 |
 | `ui/` | the registry, the interface spec, the patches | — | ~800 |
 | | | **1 909** | **≈3 350** |
 

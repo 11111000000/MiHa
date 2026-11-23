@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { delegate, type DelegateOptions } from "../src/exchange/delegate.ts";
 import type { ExchangeFrame } from "../src/exchange/protocol.ts";
-import type { AgentEvent } from "../src/core/events.ts";
-import { assistantMessage } from "../src/core/messages.ts";
+import type { JournalEntry } from "../src/core/journal.ts";
 
 /**
  * A channel with a queue, so a frame posted before the listener arrives is not lost.
@@ -71,22 +70,23 @@ function options(overrides: Partial<DelegateOptions> = {}): DelegateOptions {
 	return { ...base, ...overrides };
 }
 
-function agentEvent(
-	type: "agent_start" | "turn_start" | "message_start" | "message_end" | "agent_end",
-): AgentEvent {
-	switch (type) {
-		case "agent_start":
-			return { type: "agent_start" };
-		case "turn_start":
-			return { type: "turn_start" };
-		case "message_start":
-			return { type: "message_start", id: "m1", role: "assistant" };
-		case "message_end":
-			return { type: "message_end", id: "m1", message: assistantMessage([], "stop") };
-		case "agent_end":
-			return { type: "agent_end", messages: [], outcome: { kind: "completed" } };
-	}
-}
+/** The journal entries a peer sends: the run's own log (ADR 0008 D45). */
+const userEntry: JournalEntry = {
+	kind: "message",
+	role: "user",
+	content: "read a.txt",
+	seq: 1,
+	version: 1,
+};
+
+const callEntry: JournalEntry = {
+	kind: "tool_call",
+	callId: "c1",
+	name: "read_file",
+	argumentsText: '{"path":"a.txt"}',
+	seq: 2,
+	version: 1,
+};
 
 describe("the delegating side of the exchange", () => {
 	test("the offer carries the task and the context, and nothing about our tools", () => {
@@ -123,7 +123,7 @@ describe("the delegating side of the exchange", () => {
 		channels.up.post({ kind: "result", taskId: "t1", outcome: { kind: "completed" } });
 
 		const seen: string[] = [];
-		for await (const event of task.events) seen.push(event.type);
+		for await (const event of task.events) seen.push(event.kind);
 
 		// Nothing was answered, and nothing was forwarded.
 		expect(seen).toEqual([]);
@@ -159,14 +159,14 @@ describe("the delegating side of the exchange", () => {
 		const channels = pair();
 		const task = delegate({ ...options(), port: channels.down });
 
-		channels.up.post({ kind: "event", taskId: "t1", event: agentEvent("message_start") });
-		channels.up.post({ kind: "event", taskId: "task-other", event: agentEvent("turn_start") });
-		channels.up.post({ kind: "event", taskId: "t1", event: agentEvent("agent_end") });
+		channels.up.post({ kind: "event", taskId: "t1", event: userEntry });
+		channels.up.post({ kind: "event", taskId: "task-other", event: callEntry });
+		channels.up.post({ kind: "event", taskId: "t1", event: callEntry });
 		channels.up.post({ kind: "result", taskId: "t1", outcome: { kind: "completed" } });
 
-		const seen: string[] = [];
-		for await (const event of task.events) seen.push(event.type);
-		expect(seen).toEqual(["message_start", "agent_end"]);
+		const seen: JournalEntry[] = [];
+		for await (const event of task.events) seen.push(event);
+		expect(seen).toEqual([userEntry, callEntry]);
 	});
 
 	test("cancelling tells the peer", () => {

@@ -506,7 +506,7 @@
     },
     {
       "id": "journal-window",
-      "text": "The core keeps a bounded window of the journal resident - at most 64 entries, and a window of zero keeps none - while the host receives every entry with a gapless sequence and one version, even when the run is cancelled at once or the provider throws, the model's context stays whole and is a budget of its own, and an answer the run holds but has not written is written when the run is cancelled, so no call is left unanswered",
+      "text": "The core keeps a bounded window of the journal resident - at most 64 entries, and a window of zero keeps none - while the host receives every entry with a gapless sequence and one version, even when the run is cancelled at once or the provider throws, and the last entries reach the host before the terminal event, so a consumer that closes on it keeps them. The model's context stays whole and is a budget of its own, and an answer the run holds but has not written is written when the run is cancelled, so no call is left unanswered",
       "scope": [
         "src/core/run.ts", "src/core/loop.ts", "src/core/journal.ts",
         "test/journal-window.test.ts"
@@ -525,7 +525,7 @@
           "spec": "bun test test/journal-window.test.ts"
         }
       ],
-      "falsifier": "the resident journal growing with the length of the run, the host losing an entry or the sequence losing a number, the context losing a message, or a call left unanswered in the log",
+      "falsifier": "the resident journal growing with the length of the run, the host losing an entry or the sequence losing a number, the terminal event reaching the host before the last entries, the context losing a message, or a call left unanswered in the log",
       "register": "fact",
       "control": "sed -i 's/const kept = Math.max(0, state.entries.length + 1 - state.journalWindow);/const kept = 0;/' src/core/run.ts",
       "waiver": null
@@ -559,6 +559,62 @@
       "falsifier": "what the provider receives growing past the budget, a collapse that drops the entries after the boundary, loses the history or orphans an answer, or a digest that does not say what it swallowed",
       "register": "fact",
       "control": "sed -i 's/if (state.context.bytes <= state.contextBudget) return state;/if (true) return state;/' src/core/run.ts",
+      "waiver": null
+    },
+    {
+      "id": "exchange-receive-laws",
+      "text": "The receiving side of the exchange runs the peer's task with its own tools and reports what happened: it refuses a task it will not take and says why, refuses a peer that speaks another version, accepts a task it takes, sends the run's journal entries back as they are written, ends the task with the run's outcome, and stops the run when the peer cancels. A peer never receives a callable handle on the receiving side's tools.",
+      "scope": [
+        "src/exchange/", "test/exchange-receive.test.ts",
+        "test/exchange.test.ts", "src/core/loop.ts"
+      ],
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0011-receiving-side.md",
+        "section": null,
+        "digest": "4178a83950abe123c412c35eb86688ebbfa9d7c2a148e6817aa688101a82f22c",
+        "review": {
+          "by": "petr p.b.kosov@yandex.ru",
+          "reason": "ADR 0011 re-read after the discriminator round: the receiving side waits for its own calls before it sends the result, a throwing host is refused with a reason, a refusal without a reason is given one, a cancel before the offer withdraws the task, and the core's order (the last entries before the terminal event) is stated as the core's promise",
+          "at": 1795437702,
+          "previous_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "owner": "petr p.b.kosov@yandex.ru",
+      "requirements": [
+        {
+          "kind": "verifier",
+          "spec": "bun test test/exchange-receive.test.ts"
+        }
+      ],
+      "falsifier": "a task accepted without the peer being told, a refusal without a reason, a foreign version accepted, the run's entries not reaching the peer, an outcome that is not the run's own, a cancelled run that keeps working, or a peer left able to call the receiving side's tools",
+      "register": "fact",
+      "control": "sed -i 's/send({ kind: \"accept\", taskId });/;/' src/exchange/receive.ts",
+      "waiver": null
+    },
+    {
+      "id": "trace-cassette-laws",
+      "text": "The cassette records the provider's responses keyed by the request that asked for them, and a recorded run replays to the same journal: the replay answers the same requests with the same responses, a request the recording does not hold is reported as a divergence naming that request, and nothing but the provider's responses is recorded - the journal itself is the trace.",
+      "scope": [ "src/trace/", "test/trace.test.ts" ],
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0012-cassette.md",
+        "section": null,
+        "digest": "8ce05321f64fa9f53e1dcac5abd395a2261b4331b6d6b9e1799dea4d6a96fd6c",
+        "review": {
+          "by": "petr p.b.kosov@yandex.ru",
+          "reason": "ADR 0012 re-read after the discriminator round: the canonical form tags the types so a number and its name are different requests, a key holds a list so each recorded run replays to its own journal, a cassette of another version is refused, and the cassette is handed out as a snapshot",
+          "at": 1795437702,
+          "previous_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      },
+      "owner": "petr p.b.kosov@yandex.ru",
+      "requirements": [
+        { "kind": "verifier", "spec": "bun test test/trace.test.ts" }
+      ],
+      "falsifier": "a replay that answers differently from the recording, a missing request that is answered silently, a divergence that does not name the request, or the recording holding something the journal already holds",
+      "register": "fact",
+      "control": "sed -i 's|return hash(canonical(requestForm(request)));|return \"0\".repeat(16);|' src/trace/cassette.ts",
       "waiver": null
     }
   ]

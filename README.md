@@ -60,6 +60,8 @@ qualities of the harness itself: **effective · reliable · small · frugal**.
 | `docs/adr/0008-final-architecture.md` | the decision that fixed the final architecture |
 | `docs/adr/0009-policy-defaults.md` | the three policy defaults: result 8 192 B, turns 32, window 64 |
 | `docs/adr/0010-context-policy.md` | the context policy: 128 KiB, and what does not fit is collapsed |
+| `docs/adr/0011-receiving-side.md` | the receiving side of the exchange: it runs the peer's task with its own tools |
+| `docs/adr/0012-cassette.md` | the cassette: the provider's responses under the hash of the request |
 | `docs/adr/0004-quality-bar.md` | the quality bar and the budgets it is measured against |
 | `docs/adr/0003-core-scope.md` | how much of pi to take, and what "parity" means |
 | `docs/adr/0002-core-harness.md` | the architecture |

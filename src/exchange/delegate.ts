@@ -11,10 +11,15 @@
  * attribution without letting one agent drive another's tools. A peer that calls the
  * other side's tools acts on a decision it cannot see — it does not know which
  * affordances were exposed, how they were phrased, or what has already been tried.
+ *
+ * What comes back is the peer's **journal**: its entries, as it wrote them, and its
+ * outcome (ADR 0008 D45, D49). One vocabulary, and the delegated task is a fact in a
+ * log rather than a fact in a frame.
  */
 
-import type { AgentEvent, Outcome } from "../core/events.ts";
-import { AgentEventQueue } from "./queue.ts";
+import type { Outcome } from "../core/events.ts";
+import type { JournalEntry } from "../core/journal.ts";
+import { JournalEntryQueue } from "./queue.ts";
 import { isExchangeFrame, protocolVersion, type ExchangeFrame, type ExchangePort } from "./protocol.ts";
 
 export interface DelegateOptions {
@@ -25,8 +30,8 @@ export interface DelegateOptions {
 }
 
 export interface DelegatedTask {
-	/** The peer's events, in the order they were sent. */
-	readonly events: AsyncIterable<AgentEvent>;
+	/** The peer's journal entries, in the order they were sent. */
+	readonly events: AsyncIterable<JournalEntry>;
 	/** How the task ended. */
 	readonly outcome: Promise<Outcome>;
 	/** Asks the peer to stop. */
@@ -36,7 +41,7 @@ export interface DelegatedTask {
 export function delegate(options: DelegateOptions): DelegatedTask {
 	const { port, taskId, task, context } = options;
 
-	const events = new AgentEventQueue();
+	const events = new JournalEntryQueue();
 	let settle: ((outcome: Outcome) => void) | undefined;
 	const outcome = new Promise<Outcome>((resolve) => {
 		settle = resolve;

@@ -203,7 +203,8 @@ A claim is settled only after a discriminator has tried to break it.
 | tests — the laws | yes | |
 | the gate's own wiring | yes | |
 | the type check | | yes — it needs `node_modules`, which the evidence copy does not have |
-| the trace and the cassette | | not built yet |
+| the trace and the cassette | the code and its verifier exist; the claim is proposed, and the decision is [ADR 0012](./adr/0012-cassette.md) (D65–D69) | the owner records the claim in `spec.json` |
+| the receiving side of the exchange | the code and its verifier exist; the claim is proposed, and the decision is [ADR 0011](./adr/0011-receiving-side.md) (D59–D64) | the owner records the claim in `spec.json` |
 
 ## What the method does not do
 

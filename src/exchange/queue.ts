@@ -1,19 +1,19 @@
 /**
- * A queue of agent events.
+ * A queue of journal entries.
  *
- * The delegating side receives the peer's events over a channel and hands them to the
- * application as a stream. The channel delivers them one at a time and the
+ * The delegating side receives the peer's entries over a channel and hands them to
+ * the application as a stream. The channel delivers them one at a time and the
  * application consumes them at its own pace, so something has to hold the gap.
  *
  * It is deliberately not the core's `EventStream`: that one is closed by a terminal
  * *event*, and here the stream is closed by the **task** ending, which may come before
- * or after the peer's last event.
+ * or after the peer's last entry.
  */
 
-import type { AgentEvent } from "../core/events.ts";
+import type { JournalEntry } from "../core/journal.ts";
 
-export class AgentEventQueue implements AsyncIterable<AgentEvent> {
-	#items: AgentEvent[] = [];
+export class JournalEntryQueue implements AsyncIterable<JournalEntry> {
+	#items: JournalEntry[] = [];
 	#waiters: (() => void)[] = [];
 	#closed = false;
 
@@ -21,9 +21,9 @@ export class AgentEventQueue implements AsyncIterable<AgentEvent> {
 		return this.#closed;
 	}
 
-	push(event: AgentEvent): void {
+	push(entry: JournalEntry): void {
 		if (this.#closed) return;
-		this.#items.push(event);
+		this.#items.push(entry);
 		this.#wake();
 	}
 
@@ -33,11 +33,11 @@ export class AgentEventQueue implements AsyncIterable<AgentEvent> {
 		this.#wake();
 	}
 
-	async *[Symbol.asyncIterator](): AsyncIterator<AgentEvent> {
+	async *[Symbol.asyncIterator](): AsyncIterator<JournalEntry> {
 		for (;;) {
 			if (this.#items.length > 0) {
-				const event = this.#items.shift();
-				if (event !== undefined) yield event;
+				const entry = this.#items.shift();
+				if (entry !== undefined) yield entry;
 				continue;
 			}
 			if (this.#closed) return;

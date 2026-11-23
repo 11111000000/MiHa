@@ -13,9 +13,14 @@
  *
  * Two id spaces. A **task** is one unit of delegated work and is identified by
  * `taskId`. The frames of one task belong to one task and nothing else.
+ *
+ * One vocabulary (ADR 0008 D45): the `event` frame carries a **journal entry** —
+ * the run's own log — and not a live event. A delegated task is then a fact in a
+ * log, and not a fact in a frame (ADR 0008 D49).
  */
 
-import type { AgentEvent, Outcome } from "../core/events.ts";
+import type { Outcome } from "../core/events.ts";
+import type { JournalEntry } from "../core/journal.ts";
 
 /** The version of the protocol. A peer that speaks another version is refused. */
 export const protocolVersion = 1;
@@ -42,7 +47,13 @@ export interface RefuseFrame {
 export interface EventFrame {
 	readonly kind: "event";
 	readonly taskId: string;
-	readonly event: AgentEvent;
+	/**
+	 * The run's journal entry, as it was written.
+	 *
+	 * One vocabulary (ADR 0008 D45): the peer receives the same entries the run
+	 * wrote, not a second kind of event that has to be translated into them.
+	 */
+	readonly event: JournalEntry;
 }
 
 export interface ResultFrame {
