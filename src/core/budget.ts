@@ -46,6 +46,26 @@ function nextCodepoint(bytes: Uint8Array, index: number): number {
 }
 
 /**
+ * The size of a text in bytes.
+ */
+export function textBytes(text: string): number {
+	return encoder.encode(text).length;
+}
+
+/**
+ * Cuts text to a number of bytes, never splitting a codepoint.
+ *
+ * The same rule the result budget follows: a cut that lands inside a codepoint would
+ * put a broken character in the model's context, and the model reads it.
+ */
+export function cutText(text: string, bytes: number): string {
+	if (bytes <= 0) return "";
+	const whole = encoder.encode(text);
+	if (whole.length <= bytes) return text;
+	return decoder.decode(whole.subarray(0, startOfCodepoint(whole, bytes)));
+}
+
+/**
  * Applies the budget to one result.
  *
  * The text blocks are joined and measured as UTF-8 bytes; if they fit, the result is

@@ -529,6 +529,37 @@
       "register": "fact",
       "control": "sed -i 's/const kept = Math.max(0, state.entries.length + 1 - state.journalWindow);/const kept = 0;/' src/core/run.ts",
       "waiver": null
+    },
+    {
+      "id": "context-budget",
+      "text": "The core keeps the model's context within its budget: it measures the folded context in bytes, and when the context is over the budget the range that does not fit is collapsed into a digest entry, so what the provider receives fits the budget - unless the entries that follow alone exceed it, which the core cannot shrink. The journal keeps the whole history, the digest says what it swallowed, and what follows the collapse still pairs: a question and its answer",
+      "scope": [
+        "src/core/run.ts", "src/core/journal.ts",
+        "test/context-budget.test.ts"
+      ],
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0010-context-policy.md",
+        "section": null,
+        "digest": "95099df7d55f100194d827f7d0c2294ad6bab4d94b582e9c83ef54c1ce96c236",
+        "review": {
+          "by": "petr p.b.kosov@yandex.ru",
+          "reason": "ADR 0010 D55 and D58 refined after a second discriminator round: the digest always has room to say what it swallowed, the collapse runs after everything the turn put into the context, and a swallowed question's answer is an orphan that is not projected",
+          "at": 1795431278,
+          "previous_digest": "9e4df310e1941378ea63244adec4984950f4f4cf3e7cd2517ecdf9870ced63d3"
+        }
+      },
+      "owner": "petr p.b.kosov@yandex.ru",
+      "requirements": [
+        {
+          "kind": "verifier",
+          "spec": "bun test test/context-budget.test.ts"
+        }
+      ],
+      "falsifier": "what the provider receives growing past the budget, a collapse that drops the entries after the boundary, loses the history or orphans an answer, or a digest that does not say what it swallowed",
+      "register": "fact",
+      "control": "sed -i 's/if (state.context.bytes <= state.contextBudget) return state;/if (true) return state;/' src/core/run.ts",
+      "waiver": null
     }
   ]
 }

@@ -193,12 +193,17 @@ Derived from protocol facts, each with its witness where it depends on the drive
 
 **The host sets the policy; the core enforces the law.**
 
+The context's budget is the fourth one (ADR 0010): the core measures the folded
+context, and when it is over the budget the range that does not fit is collapsed into
+a digest the model is told is lossy. With it, the three terms of law R1 — the window,
+the context, one result — are all bounded by a number.
+
 | Budget | Limit | Set by | Enforced by | Default |
 |---|---|---|---|---|
 | bundle | 30 000 B gzip, browser, minified | us | the build fails | — |
 | result | bytes per tool result | the host | the core truncates and announces | 8 192 B, head and tail kept ([ADR 0009](./adr/0009-policy-defaults.md) D50) |
 | turns | per run | the host | the outcome says `limitReached` | 32 — twice the observed median task ([ADR 0009](./adr/0009-policy-defaults.md) D51) |
-| context | tokens per projection | the host | the fold's accounting | — |
+| context | bytes of text in the model's context | the host | the core collapses what does not fit ([ADR 0010](./adr/0010-context-policy.md) D54) | 128 KiB — twice a median task (D54) | — |
 | memory | the resident window | the host | R1 | 64 entries, decided, enforced when the journal windows ([ADR 0009](./adr/0009-policy-defaults.md) D52) |
 
 ---

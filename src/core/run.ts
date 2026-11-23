@@ -23,7 +23,9 @@ import { validate } from "../schema/dialect.ts";
 import { assertNever } from "./exhaustive.ts";
 import {
 	DEFAULT_RESULT_BUDGET,
+	cutText,
 	resolveBudget,
+	textBytes,
 	truncateContent,
 	truncateToolResult,
 } from "./budget.ts";
@@ -50,9 +52,11 @@ import {
 	contextMessages,
 	foldContext,
 	initialContextState,
+	messageBytes,
 	resolveJournalWindow,
 	DEFAULT_JOURNAL_WINDOW,
 	JOURNAL_VERSION,
+	type ContextItem,
 	type ContextState,
 	type JournalBody,
 	type JournalEntry,
@@ -84,6 +88,21 @@ export function resolveTurnLimit(limit: number | undefined): number {
 
 export { DEFAULT_RESULT_BUDGET } from "./budget.ts";
 
+/** The default context budget: 128 KiB of text (ADR 0010 D54). */
+export const DEFAULT_CONTEXT_BUDGET = 131_072;
+
+/**
+ * Resolves the host's context budget into the one the core enforces.
+ *
+ * A budget that is not a number, or a negative one, is nonsense, and nonsense gets
+ * the default. Zero is honoured: the core then keeps as little as it can.
+ */
+export function resolveContextBudget(budget: number | undefined): number {
+	if (budget === undefined) return DEFAULT_CONTEXT_BUDGET;
+	if (Number.isNaN(budget) || budget < 0) return DEFAULT_CONTEXT_BUDGET;
+	return budget;
+}
+
 export interface HarnessConfig {
 	readonly model: string;
 	readonly system: string;
@@ -104,6 +123,12 @@ export interface HarnessConfig {
 	 * (law R1, ADR 0009 D52).
 	 */
 	readonly journalWindow?: number;
+	/**
+	 * How many bytes of text the model's context may hold. The core collapses what
+	 * does not fit (ADR 0010 D54); the default is 128 KiB — twice the size of a
+	 * median task.
+	 */
+	readonly contextBudget?: number;
 	readonly options?: Readonly<Record<string, unknown>>;
 }
 
@@ -221,6 +246,8 @@ export interface RunState {
 	readonly blocks: readonly BlockInfo[];
 	/** How many entries stay resident (law R1). */
 	readonly journalWindow: number;
+	/** How many bytes of text the model's context may hold. */
+	readonly contextBudget: number;
 	/** How many provider requests have been made. */
 	readonly turn: number;
 	/** The next id the core will hand out. Deterministic, so a run replays. */
@@ -246,6 +273,7 @@ export function initialState(config: HarnessConfig): RunState {
 		written: [],
 		blocks: [],
 		journalWindow: resolveJournalWindow(config.journalWindow),
+		contextBudget: resolveContextBudget(config.contextBudget),
 		turn: 0,
 		nextId: 1,
 		accumulator: undefined,
@@ -785,6 +813,96 @@ function announce(outputs: Output[], id: string, message: AgentMessage): void {
 	outputs.push({ kind: "event", event: { type: "message_end", id, message } });
 }
 
+/**
+ * Collapses what does not fit into the context's budget.
+ *
+ * The core measures the folded context in bytes and, when it is over the budget,
+ * collapses the oldest range into a digest and keeps what follows. The journal
+ * keeps the whole history: a compaction is a fold, not a deletion (ADR 0008 D45).
+ *
+ * What cannot be shrunk is the range that follows: if those entries alone exceed
+ * the budget, the context stays over it, and the core says so in the digest.
+ */
+function compactIfNeeded(state: RunState, outputs: Output[]): RunState {
+	if (state.context.bytes <= state.contextBudget) return state;
+
+	const items = state.context.items;
+	const prefix = textBytes(COMPACTED_PREFIX);
+	// The digest gets at least a quarter of the budget: a summary that says
+	// nothing is no summary. The entries that follow take what is left, and the
+	// digest takes what they leave — so the context after the collapse fits.
+	const minimum = Math.floor(state.contextBudget / 4);
+	const room = Math.max(0, state.contextBudget - minimum - prefix);
+	let kept = 0;
+	let bytes = 0;
+	for (let index = items.length - 1; index >= 0; index -= 1) {
+		const item = items[index];
+		if (item === undefined) break;
+		const size = messageBytes(item.message);
+		if (kept > 0 && bytes + size > room) break;
+		bytes += size;
+		kept += 1;
+	}
+
+	// The range that follows is the newest `kept` items: `items.length - kept` is
+	// where it begins. Counting from the front instead would leave the range that
+	// does not fit standing.
+	const boundary = items[items.length - kept]?.seq;
+	if (boundary === undefined) return state;
+
+	const collapsed = items.slice(0, items.length - kept);
+	// The digest always has room to say something: a summary that says nothing is
+	// no summary, and the law's exception already covers a context that cannot fit.
+	const digestRoom = Math.max(minimum, state.contextBudget - bytes - prefix);
+	const summary = digest(collapsed, digestRoom);
+	const { state: written } = write(
+		state,
+		{ kind: "compaction", firstKeptSeq: boundary, summary, dropped: collapsed.length },
+		outputs,
+	);
+	return written;
+}
+
+/** What the fold writes in front of a digest, so the model knows it is lossy. */
+const COMPACTED_PREFIX = "[compacted] ";
+
+/**
+ * A digest of what was collapsed: one line per message, the first words of it.
+ *
+ * The digest is mechanical and lossy, and it says so: the model is told that this is
+ * a summary of what came before, not the thing itself. A host that can write a better
+ * summary — by asking the model — replaces it with a `change` entry.
+ *
+ * It is cut to the room it was given, in bytes and never inside a codepoint: a
+ * digest that does not fit is worse than a digest that fits, and a broken character
+ * in the model's context is worse than both.
+ */
+function digest(items: readonly ContextItem[], room: number): string {
+	const lines: string[] = [];
+	for (const item of items) {
+		const message = item.message;
+		let text: string;
+		if (message.role === "user") {
+			text = typeof message.content === "string" ? message.content : blocksText(message.content);
+		} else {
+			text = blocksText(message.content);
+		}
+		lines.push(`${message.role}: ${text.slice(0, 120)}`);
+	}
+	return cutText(`${items.length} entries collapsed: ${lines.join(" | ")}`, room);
+}
+
+/** The text of a message's blocks, one after another. */
+function blocksText(blocks: readonly (TextContent | ImageContent | ThinkingContent | ToolCallBlock)[]): string {
+	const parts: string[] = [];
+	for (const block of blocks) {
+		if (block.type === "text") parts.push(block.text);
+		else if (block.type === "thinking") parts.push(block.thinking);
+		else if (block.type === "toolCall") parts.push(`${block.name}(${block.argumentsText})`);
+	}
+	return parts.join(" ");
+}
+
 /** A call that never ran still gets an answer (law M1). */
 function syntheticResult(call: AccumulatedCall, reason: string): ToolResultMessage {
 	return toolResultMessage(call.id, call.name, [{ type: "text", text: reason }], true);
@@ -821,12 +939,14 @@ function endTurn(state: RunState, outputs: Output[], hadToolCalls: boolean): Ste
 			results: [],
 			turn: state.turn + 1,
 		};
-		return beginTurn(prepared, outputs);
+		// The context is bounded after everything this turn put into it: the queued
+		// message is part of the context now, and the request must fit.
+		return beginTurn(compactIfNeeded(prepared, outputs), outputs);
 	}
 
 	if (hadToolCalls) {
 		const prepared: RunState = { ...state, phase: "requesting", results: [], turn: state.turn + 1 };
-		return beginTurn(prepared, outputs);
+		return beginTurn(compactIfNeeded(prepared, outputs), outputs);
 	}
 
 	return finish(state, { kind: "completed" }, outputs);

@@ -138,6 +138,31 @@ export type JournalBody =
 /** A body with its envelope: the entry as the log holds it. */
 export type JournalEntry = JournalBody & JournalEnvelope;
 
+const encoder = new TextEncoder();
+
+/** The size of a block in bytes of text. Images are not counted: they are the host's business. */
+function blockBytes(block: TextContent | ImageContent | ThinkingContent | ToolCallBlock): number {
+	if (block.type === "text") return encoder.encode(block.text).length;
+	if (block.type === "thinking") return encoder.encode(block.thinking).length;
+	if (block.type === "toolCall") return encoder.encode(`${block.name}${block.argumentsText}`).length;
+	return 0;
+}
+
+/**
+ * The size of a message in bytes of text.
+ *
+ * The context is measured in bytes, not in tokens: the core has no tokenizer and no
+ * model, and a byte is the unit the result budget already speaks (ADR 0009 D50).
+ */
+export function messageBytes(message: AgentMessage): number {
+	if (message.role === "user") {
+		return typeof message.content === "string"
+			? encoder.encode(message.content).length
+			: message.content.reduce((sum, block) => sum + blockBytes(block), 0);
+	}
+	return message.content.reduce((sum, block) => sum + blockBytes(block), 0);
+}
+
 /**
  * One message in the context, and the entries it came from.
  *
@@ -147,10 +172,11 @@ export type JournalEntry = JournalBody & JournalEnvelope;
  * a result whose question was compacted away is an orphan, and orphans are not
  * context.
  */
-interface ContextItem {
+export interface ContextItem {
 	readonly seq: number;
 	readonly seqs: readonly number[];
-	readonly calls: readonly string[];
+	/** The calls this message holds, each with the sequence of the entry that asked. */
+	readonly calls: readonly { readonly id: string; readonly seq: number }[];
 	readonly message: AgentMessage;
 }
 
@@ -164,12 +190,16 @@ interface ContextItem {
 export interface ContextState {
 	readonly items: readonly ContextItem[];
 	readonly openAssistant: number | undefined;
-	/** The calls that were asked and not yet answered. */
-	readonly pending: readonly string[];
+	/** The calls that were asked and not yet answered, with the entry that asked. */
+	readonly pending: readonly { readonly id: string; readonly seq: number }[];
+	/** The calls whose questions a collapse swallowed: their answers are orphans. */
+	readonly collapsedCalls: readonly { readonly id: string; readonly seq: number }[];
+	/** The size of the context in bytes of text. */
+	readonly bytes: number;
 }
 
 export function initialContextState(): ContextState {
-	return { items: [], openAssistant: undefined, pending: [] };
+	return { items: [], openAssistant: undefined, pending: [], collapsedCalls: [], bytes: 0 };
 }
 
 /**
@@ -181,7 +211,7 @@ export function initialContextState(): ContextState {
 function item(
 	seq: number,
 	message: AgentMessage,
-	calls: readonly string[] = [],
+	calls: readonly { readonly id: string; readonly seq: number }[] = [],
 ): ContextItem {
 	return { seq, seqs: [seq], calls, message };
 }
@@ -190,9 +220,16 @@ function item(
 function folded(
 	items: readonly ContextItem[],
 	openAssistant: number | undefined,
-	pending: readonly string[],
+	pending: readonly { readonly id: string; readonly seq: number }[],
+	bytes: number,
+	collapsedCalls: readonly { readonly id: string; readonly seq: number }[] = [],
 ): ContextState {
-	return { items, openAssistant, pending };
+	return { items, openAssistant, pending, bytes, collapsedCalls };
+}
+
+/** The size of a set of items. */
+function itemsBytes(items: readonly ContextItem[]): number {
+	return items.reduce((sum, item) => sum + messageBytes(item.message), 0);
 }
 
 /**
@@ -230,17 +267,39 @@ function answer(
 	seq: number,
 	callId: string,
 	message: AgentMessage,
-): { readonly items: readonly ContextItem[]; readonly pending: readonly string[] } {
-	const item: ContextItem = { seq, seqs: [seq], calls: [], message };
-	const waiting = state.pending.includes(callId);
-	const pending = waiting ? state.pending.filter((id) => id !== callId) : state.pending;
+): {
+	readonly items: readonly ContextItem[];
+	readonly pending: readonly { readonly id: string; readonly seq: number }[];
+	/** The size of the answer it replaced, zero when it replaced none. */
+	readonly replaced: number;
+	/** True when the answer is an orphan and must not be projected. */
+	readonly orphan: boolean;
+} {
+	const asked = state.pending.find((call) => call.id === callId);
+	// The question was swallowed by a collapse: the answer is an orphan, and an
+	// orphan is not context (the model must not read an answer to a question it
+	// cannot see).
+	if (asked === undefined && state.collapsedCalls.some((call) => call.id === callId)) {
+		return { items: state.items, pending: state.pending, replaced: 0, orphan: true };
+	}
+	const item: ContextItem = {
+		seq,
+		seqs: [seq],
+		calls: asked ? [asked] : [],
+		message,
+	};
+	const waiting = asked !== undefined;
+	const pending = waiting
+		? state.pending.filter((call) => call !== asked)
+		: state.pending;
 	const index = state.items.findIndex(
 		(candidate) => candidate.message.role === "toolResult" && candidate.message.toolCallId === callId,
 	);
-	if (waiting || index === -1) return { items: [...state.items, item], pending };
+	if (waiting || index === -1) return { items: [...state.items, item], pending, replaced: 0, orphan: false };
 	const items = [...state.items];
+	const replaced = items[index] === undefined ? 0 : messageBytes(items[index].message);
 	items[index] = item;
-	return { items, pending };
+	return { items, pending, replaced, orphan: false };
 }
 
 /**
@@ -253,10 +312,12 @@ export function foldContext(state: ContextState, entry: JournalEntry): ContextSt
 	switch (entry.kind) {
 		case "message": {
 			if (entry.role === "user") {
+				const message = { role: "user", content: entry.content } as AgentMessage;
 				return folded(
-					[...state.items, item(entry.seq, { role: "user", content: entry.content })],
+					[...state.items, item(entry.seq, message)],
 					undefined,
 					state.pending,
+					state.bytes + messageBytes(message),
 				);
 			}
 			const message = assistantMessage(
@@ -265,7 +326,12 @@ export function foldContext(state: ContextState, entry: JournalEntry): ContextSt
 				entry.usage,
 				entry.errorMessage,
 			);
-			return folded([...state.items, item(entry.seq, message)], entry.seq, state.pending);
+			return folded(
+				[...state.items, item(entry.seq, message)],
+				entry.seq,
+				state.pending,
+				state.bytes + messageBytes(message),
+			);
 		}
 		case "tool_call": {
 			const block = toolCall(entry.callId, entry.name, entry.argumentsText);
@@ -273,21 +339,28 @@ export function foldContext(state: ContextState, entry: JournalEntry): ContextSt
 			const open = index === -1 ? undefined : state.items[index];
 			if (open && open.message.role === "assistant") {
 				const items = [...state.items];
+				const joined = { ...open.message, content: [...open.message.content, block] };
 				items[index] = {
 					seq: open.seq,
 					seqs: [...open.seqs, entry.seq],
-					calls: [...open.calls, entry.callId],
-					message: { ...open.message, content: [...open.message.content, block] },
+					calls: [...open.calls, { id: entry.callId, seq: entry.seq }],
+					message: joined,
 				};
-				return folded(items, state.openAssistant, [...state.pending, entry.callId]);
+				return folded(
+					items,
+					state.openAssistant,
+					[...state.pending, { id: entry.callId, seq: entry.seq }],
+					state.bytes + messageBytes(joined) - messageBytes(open.message),
+				);
 			}
 			// A call with no message to join starts one — the model asked, and the
 			// request is what it asked.
 			const message = assistantMessage([block], "toolUse");
 			return folded(
-				[...state.items, item(entry.seq, message, [entry.callId])],
+				[...state.items, item(entry.seq, message, [{ id: entry.callId, seq: entry.seq }])],
 				entry.seq,
-				[...state.pending, entry.callId],
+				[...state.pending, { id: entry.callId, seq: entry.seq }],
+				state.bytes + messageBytes(message),
 			);
 		}
 		case "tool_result": {
@@ -299,7 +372,13 @@ export function foldContext(state: ContextState, entry: JournalEntry): ContextSt
 				entry.details,
 			);
 			const recorded = answer(state, entry.seq, entry.callId, message);
-			return folded(recorded.items, undefined, recorded.pending);
+			return folded(
+				recorded.items,
+				undefined,
+				recorded.pending,
+				recorded.orphan ? state.bytes : state.bytes + messageBytes(message) - recorded.replaced,
+				state.collapsedCalls,
+			);
 		}
 		case "block": {
 			// The refusal is the model's answer: it reads why, and it recovers.
@@ -310,7 +389,13 @@ export function foldContext(state: ContextState, entry: JournalEntry): ContextSt
 				true,
 			);
 			const recorded = answer(state, entry.seq, entry.callId, message);
-			return folded(recorded.items, undefined, recorded.pending);
+			return folded(
+				recorded.items,
+				undefined,
+				recorded.pending,
+				recorded.orphan ? state.bytes : state.bytes + messageBytes(message) - recorded.replaced,
+				state.collapsedCalls,
+			);
 		}
 		case "compaction": {
 			// The range collapses into the summary. An item survives when it begins
@@ -318,27 +403,45 @@ export function foldContext(state: ContextState, entry: JournalEntry): ContextSt
 			// a result whose question was compacted away is an orphan, and an orphan
 			// is not context.
 			const collapsed = state.items.filter((item) => item.seq < entry.firstKeptSeq);
-			const orphans = new Set(collapsed.flatMap((item) => item.calls));
+			// A collapse that swallowed nothing changes nothing: the summary would
+			// only take a place the log has no room for.
+			if (collapsed.length === 0) {
+				return { ...state, bytes: state.bytes };
+			}
+			// An answer whose question was swallowed is an orphan — and it is the
+			// call's own entry that says so, not its name: a name may be reused.
+			const orphans = new Set(collapsed.flatMap((item) => item.calls.map((call) => call.seq)));
 			const kept = state.items.filter(
 				(item) =>
 					item.seq >= entry.firstKeptSeq &&
-					!(item.message.role === "toolResult" && orphans.has(item.message.toolCallId)),
+					!(item.message.role === "toolResult" && orphans.has(item.calls[0]?.seq ?? -1)),
 			);
-			const summary = item(entry.seq, { role: "user", content: `[compacted] ${entry.summary}` });
+			const summaryMessage = { role: "user", content: `[compacted] ${entry.summary}` } as AgentMessage;
+			// The summary takes the place of the range it replaces, so the items stay
+			// in the order the log has them.
+			const summary = item(collapsed[0]?.seq ?? entry.seq, summaryMessage);
 			const open = state.openAssistant;
 			const survives = open !== undefined && kept.some((candidate) => candidate.seq === open);
-			return folded([summary, ...kept], survives ? open : undefined, state.pending);
+			return folded(
+				[summary, ...kept],
+				survives ? open : undefined,
+				state.pending.filter((call) => !orphans.has(call.seq)),
+				itemsBytes(kept) + messageBytes(summaryMessage),
+				[...state.collapsedCalls, ...collapsed.flatMap((item) => item.calls)],
+			);
 		}
 		case "change": {
 			// The model-facing view is replaced; the entry in the log is not. The
 			// target may name a call that joined an assistant message — the change
 			// then speaks about that message, which is where the call is seen.
-			const items = state.items.map((item) =>
-				item.seqs.includes(entry.targetSeq)
-					? { ...item, message: withContent(item.message, entry.content) }
-					: item,
-			);
-			return folded(items, state.openAssistant, state.pending);
+			let delta = 0;
+			const items = state.items.map((item) => {
+				if (!item.seqs.includes(entry.targetSeq)) return item;
+				const message = withContent(item.message, entry.content);
+				delta += messageBytes(message) - messageBytes(item.message);
+				return { ...item, message };
+			});
+			return folded(items, state.openAssistant, state.pending, state.bytes + delta);
 		}
 	}
 }
