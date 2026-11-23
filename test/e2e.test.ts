@@ -5,12 +5,15 @@ import type { HarnessConfig, ProviderRequest } from "../src/core/run.ts";
 import type { AgentEvent, ProviderEvent } from "../src/core/events.ts";
 import { toolRegistry, type ToolDefinition } from "../src/core/tools.ts";
 import {
+	toolResultMessage,
 	userMessage,
 	type AgentMessage,
 	type ToolResult,
 	type ToolResultMessage,
 } from "../src/core/messages.ts";
 import type { ToolCallPlan } from "../src/core/tools.ts";
+import { contextMessages, type JournalEntry } from "../src/core/journal.ts";
+import { initialState, step, type RunState } from "../src/core/run.ts";
 
 /**
  * A provider that replays a script.
@@ -564,7 +567,7 @@ describe("the host receives every entry the run produced", () => {
 				done("toolUse"),
 			],
 		];
-		const entries: { readonly message: AgentMessage }[] = [];
+		const entries: JournalEntry[] = [];
 		const run = runAgent(
 			config(1),
 			{ ...host(scriptedProvider(script)), append: (entry) => entries.push(entry) },
@@ -575,7 +578,34 @@ describe("the host receives every entry the run produced", () => {
 		}
 		await run.result();
 
-		const roles = entries.map((entry) => entry.message.role);
-		expect(roles).toEqual(["user", "assistant", "toolResult"]);
+		const kinds = entries.map((entry) => entry.kind);
+		expect(kinds).toEqual(["message", "message", "tool_call", "tool_result"]);
+	});
+});
+
+describe("law M1 — a call id reused in a later batch is answered again", () => {
+	test("the second batch's call gets its own answer", () => {
+		let state = step(initialState(config()), { kind: "prompt", message: userMessage("go") }).state;
+		const providerTurn = (): RunState => {
+			let next = state;
+			for (const event of [
+				{ type: "tool_call_start", id: "c1", name: "read_file" },
+				{ type: "tool_arguments_delta", id: "c1", delta: '{"path":"a.txt"}' },
+				done("toolUse"),
+			] as ProviderEvent[]) {
+				next = step(next, { kind: "provider", event }).state;
+			}
+			return next;
+		};
+		state = providerTurn();
+		state = step(state, {
+			kind: "tool_result",
+			result: toolResultMessage("c1", "read_file", [{ type: "text", text: "contents" }], false),
+		}).state;
+		state = providerTurn();
+		state = step(state, { kind: "cancel" }).state;
+
+		const answers = contextMessages(state.context).filter((message) => message.role === "toolResult");
+		expect(answers).toHaveLength(2);
 	});
 });

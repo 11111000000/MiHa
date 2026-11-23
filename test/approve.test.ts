@@ -6,6 +6,7 @@ import type { AgentEvent, ProviderEvent } from "../src/core/events.ts";
 import { toolRegistry, type ToolDefinition } from "../src/core/tools.ts";
 import type { AgentMessage, ToolResultMessage } from "../src/core/messages.ts";
 import { userMessage } from "../src/core/messages.ts";
+import type { JournalEntry } from "../src/core/journal.ts";
 
 /**
  * The approve seam (ADR 0008 D44): the host is asked before each tool runs, and the
@@ -186,6 +187,24 @@ describe("the approve seam", () => {
 		expect(seen?.call.id).toBe("c1");
 		expect(seen?.tool.name).toBe("count");
 		expect(seen?.args).toEqual({ n: 42 });
+	});
+
+	test("a denial is recorded in the journal as a block", async () => {
+		const entries: JournalEntry[] = [];
+		const run = runAgent(config(), {
+			...host(scriptedProvider(callThenStop)),
+			approve: async () => ({ kind: "deny" as const, reason: "the user refused" }),
+			append: (entry) => entries.push(entry),
+		}, { message: userMessage("what is in a.txt?") });
+
+		await collect(run);
+
+		const blocks = entries.filter((entry) => entry.kind === "block");
+		expect(blocks).toHaveLength(1);
+		const block = blocks[0];
+		if (!block || block.kind !== "block") throw new Error("no block");
+		expect(block.callId).toBe("c1");
+		expect(block.reason).toBe("the user refused");
 	});
 
 	test("a denial never runs the tool", async () => {

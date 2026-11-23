@@ -51,19 +51,42 @@ the 30 000 B ceiling.
 the dispatch plan and its grouping. `src/core/permissions.ts` — the hook the host
 fills. `src/core/json.ts` — parsing that cannot throw.
 
+(The permission hook is gone: it was synchronous, and it moved to the driver as the
+asynchronous `approve` seam — ADR 0008 D44.)
+
 Proven by: laws M1, M2, M3 and the policy T1 — 19 tests covering an unknown tool, a
 validation failure with a path, a truncated argument string, a salvaged fragment that
 parses but does not validate, a throwing tool, a host that blocks a call, a host that
 narrows a call's arguments, and an exclusive tool beside a shared one.
 
-### 3. The transcript and the projection — **done, except compaction**
+### 3. The transcript and the projection — **done, and now a journal**
 
-`src/core/transcript.ts` — 19 code lines. Append-only entries and the projection.
-The core emits append intents and never touches storage; the host performs the append
-and stamps the time. The compaction marker is still to come.
+`src/core/transcript.ts` held append-only message entries and a trivial projection.
+It is **gone**: the journal replaced it (step 3b).
 
 Proven by: laws T4 and the replay property — a run's transcript is a function of its
 inputs, and re-running the same inputs produces the same transcript.
+
+### 3b. The journal as durable events — **done**
+
+`src/core/journal.ts` — one append-only log of durable events, every entry carrying
+a monotonic sequence and one version (ADR 0006 D39, ADR 0008 D45). Six kinds:
+`message`, `tool_call`, `tool_result`, `compaction`, `change`, `block`. The model's
+context is a **named projection**: a fold over the log, advanced one entry at a time.
+
+The core keeps a **window** of the log resident (64 entries, ADR 0009 D52) and the
+host holds the whole thing; the context is whole regardless, because it is folded
+forward rather than recomputed from the entries the core still holds. That is law
+R1's first half: the resident memory of a run does not grow with its length.
+
+Three new inputs carry the host's policy into the log: `blocked` (a refusal, which
+is the model's answer and the audit trail at once), `compact` (a range collapsed into
+a summary) and `change` (an earlier entry's model-facing view replaced, the history
+untouched).
+
+Proven by: claims `journal-events` and `journal-window` — the fold, the replay law
+(*fold(replay(log)) ≡ fold(log)*), the compaction, the change, the refusal, the
+bounded window and the gapless sequence the host receives.
 
 ### 4. The state machine — **done**
 

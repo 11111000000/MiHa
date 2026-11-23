@@ -41,7 +41,7 @@ import {
 import { validate } from "../schema/dialect.ts";
 import type { ToolCallBlock } from "./messages.ts";
 import type { AgentMessage, ToolResult, ToolResultMessage } from "./messages.ts";
-import type { TranscriptEntry } from "./transcript.ts";
+import type { JournalEntry } from "./journal.ts";
 
 /**
  * What the host answers when the driver asks about a call (ADR 0008 D44).
@@ -78,8 +78,8 @@ export interface HarnessHost {
 		request: ProviderRequest,
 		signal: AbortSignal,
 	) => AsyncIterable<ProviderEvent>;
-	/** Persists a transcript entry. The host may stamp it with a time. */
-	readonly append?: (entry: TranscriptEntry) => void;
+	/** Persists a journal entry. The host may stamp it with a time. */
+	readonly append?: (entry: JournalEntry) => void;
 	/** Asked before each tool runs. Absent means every planned tool runs. */
 	readonly approve?: Approve;
 }
@@ -139,6 +139,7 @@ export function runAgent(
 		if (options.signal?.aborted) {
 			// Cancelled before the first turn: the run still starts, and it still ends.
 			apply({ kind: "cancel" });
+			flushEntries();
 			return;
 		}
 
@@ -159,22 +160,40 @@ export function runAgent(
 					}
 					break;
 				case "tool_plan":
-					await runPlan(intent.plan, signal, host.approve, (result) => {
-						apply({ kind: "tool_result", result });
-					}, (toolCallId, partial) => {
-						apply({ kind: "tool_progress", toolCallId, partial });
-					});
+					await runPlan(
+						intent.plan,
+						signal,
+						host.approve,
+						(result) => {
+							apply({ kind: "tool_result", result });
+						},
+						(call, reason) => {
+							apply({ kind: "blocked", call, reason });
+						},
+						(toolCallId, partial) => {
+							apply({ kind: "tool_progress", toolCallId, partial });
+						},
+					);
 					break;
 			}
 		}
 
-		// The run is over, but the host still has to receive the last entries: the
-		// loop stops the moment the machine finishes, and the appends of that final
-		// turn are still queued. A transcript the host never saw is a transcript the
-		// host cannot keep.
+		flushEntries();
+	};
+
+	/**
+	 * Hands the host the entries the run wrote.
+	 *
+	 * The loop stops the moment the machine finishes, and the appends of that final
+	 * turn are still queued. A transcript the host never saw is a transcript the host
+	 * cannot keep — so they are handed over, whether the run ended normally, was
+	 * cancelled before its first request, or the provider threw.
+	 */
+	const flushEntries = (): void => {
 		for (const intent of intents) {
 			if (intent.kind === "append") host.append?.(intent.entry);
 		}
+		intents.length = 0;
 	};
 
 	void (async () => {
@@ -186,6 +205,8 @@ export function runAgent(
 				apply({ kind: "cancel" });
 			}
 		} catch (error) {
+			// The provider threw: the entries the run wrote are still the host's.
+			flushEntries();
 			stream.fail(error);
 		} finally {
 			options.signal?.removeEventListener("abort", onAbort);
@@ -209,10 +230,11 @@ async function runPlan(
 	signal: AbortSignal,
 	approve: Approve | undefined,
 	accept: (result: ToolResultMessage) => void,
+	block: (call: ToolCallBlock, reason: string) => void,
 	progress: (toolCallId: string, partial: ToolResult) => void,
 ): Promise<void> {
 	for (const group of plan.groups) {
-		await Promise.all(group.map((entry) => runOne(entry, signal, approve, accept, progress)));
+		await Promise.all(group.map((entry) => runOne(entry, signal, approve, accept, block, progress)));
 	}
 }
 
@@ -230,6 +252,7 @@ async function runOne(
 	signal: AbortSignal,
 	approve: Approve | undefined,
 	accept: (result: ToolResultMessage) => void,
+	block: (call: ToolCallBlock, reason: string) => void,
 	progress: (toolCallId: string, partial: ToolResult) => void,
 ): Promise<void> {
 	let args = entry.args;
@@ -243,7 +266,8 @@ async function runOne(
 			return;
 		}
 		if (decision.kind === "deny") {
-			accept(reject(entry.call, decision.reason));
+			// The refusal is the model's answer: it reads why, and it recovers.
+			block(entry.call, decision.reason);
 			return;
 		}
 		if (decision.kind === "rewrite") {

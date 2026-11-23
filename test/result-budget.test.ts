@@ -4,6 +4,7 @@ import type { HarnessHost } from "../src/core/loop.ts";
 import type { HarnessConfig, ProviderRequest } from "../src/core/run.ts";
 import { DEFAULT_RESULT_BUDGET, DEFAULT_TURN_LIMIT, resolveTurnLimit } from "../src/core/run.ts";
 import { resolveBudget, truncateToolResult } from "../src/core/budget.ts";
+import type { JournalEntry } from "../src/core/journal.ts";
 import type { AgentEvent, ProviderEvent } from "../src/core/events.ts";
 import { toolRegistry, type ToolDefinition } from "../src/core/tools.ts";
 import type { AgentMessage, ToolResultMessage } from "../src/core/messages.ts";
@@ -379,7 +380,7 @@ describe("the result budget", () => {
 	});
 
 	test("the transcript entry the host receives is budgeted", async () => {
-		const entries: { readonly message: AgentMessage }[] = [];
+		const entries: JournalEntry[] = [];
 		const run = runAgent(
 			{ ...onceTool(bigTool(20_000)), turnLimit: 1 },
 			{ callProvider: callProvider(), append: (entry) => entries.push(entry) },
@@ -389,10 +390,17 @@ describe("the result budget", () => {
 			// drain
 		}
 		await run.result();
-		const toolEntries = entries.filter((entry) => entry.message.role === "toolResult");
+		const toolEntries = entries.filter((entry) => entry.kind === "tool_result");
 		expect(toolEntries).toHaveLength(1);
-		const message = toolEntries[0]?.message;
-		if (!message || message.role !== "toolResult") throw new Error("no tool result");
+		const entry = toolEntries[0];
+		if (!entry || entry.kind !== "tool_result") throw new Error("no tool result");
+		const message: ToolResultMessage = {
+			role: "toolResult",
+			toolCallId: entry.callId,
+			toolName: entry.name,
+			content: entry.content,
+			isError: entry.isError,
+		};
 		expect(textOf(message)).toContain("[result truncated:");
 	});
 
