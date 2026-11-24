@@ -138,7 +138,14 @@ the usage of a turn is the largest report of each count, the options bag holds t
 provider's knobs and cannot replace the adapter's fields, and the system prompt is the
 first message of the wire ([ADR 0015](./adr/0015-provider-defects.md) D82–D90).
 
-### 2.5 The interface layer
+### 2.5 The journal, wherever the run happens
+
+The journal is written where the run happens — in the worker, in the usual browser
+placement — and the **entries** cross to the page as they are written, so the page
+keeps the durable record and the live events stay the view ([ADR 0019](./adr/0019-worker-placement.md)
+D104–D105).
+
+### 2.6 The interface layer
 
 The agent may **draw**: a component registry (what the host's interface is made of), a
 **flat spec** (what the agent asks for — data, never code), patches (the host's own
@@ -147,7 +154,7 @@ D91–D98). A spec is refused before rendering when it names a component the reg
 not have or a property it does not declare, and the same spec always produces the same
 tree. A refusal is a first-class event, not folded into the tool result (D98).
 
-### 2.6 The peer, on both sides
+### 2.7 The peer, on both sides
 
 The exchange is symmetric: the delegating side offers a task, and the **receiving
 side** accepts it, runs it with **its own** tools, and sends the run's journal
@@ -158,7 +165,7 @@ A **cassette** records the provider's responses under the hash of the request th
 asked for them, and replays a run without a network ([ADR 0012](./adr/0012-cassette.md)).
 The journal is the trace; the cassette holds only what the journal cannot.
 
-### 2.7 The host surface — seven hooks, and nothing else
+### 2.8 The host surface — seven hooks, and nothing else
 
 | Hook | The host provides | May not |
 |---|---|---|

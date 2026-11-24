@@ -65,6 +65,7 @@ qualities of the harness itself: **effective · reliable · small · frugal**.
 | `docs/adr/0012-cassette.md` | the cassette: the provider's responses under the hash of the request |
 | `docs/adr/0017-tool-timeout-and-host-digest.md` | the tool timeout (120 s) and the host's better digest |
 | `docs/adr/0018-fieldwork.md` | the fieldwork: a live run against MiniMax, and the bundle measured in situ |
+| `docs/adr/0019-worker-placement.md` | where the journal lives when the harness runs in a worker |
 | `docs/adr/0004-quality-bar.md` | the quality bar and the budgets it is measured against |
 | `docs/adr/0003-core-scope.md` | how much of pi to take, and what "parity" means |
 | `docs/adr/0002-core-harness.md` | the architecture |
