@@ -83,6 +83,18 @@ export function delegate(options: DelegateOptions): DelegatedTask {
 		}
 	});
 
+	/**
+	 * A transport that cannot carry the offer ends the task.
+	 *
+	 * The peer will never hear the offer, and a peer that hears nothing waits
+	 * forever: the task ends as a failure that says the peer could not be reached
+	 * (ADR 0011 D79). The transport reports the failure rather than throwing it,
+	 * so this is where it is decided.
+	 */
+	port.onFailure?.((failure) => {
+		finish({ kind: "failed", error: `the peer could not be reached: ${failure.error.message}` });
+	});
+
 	const offer: ExchangeFrame = {
 		kind: "offer",
 		version: protocolVersion,

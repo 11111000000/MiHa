@@ -419,7 +419,16 @@ export function foldContext(state: ContextState, entry: JournalEntry): ContextSt
 			const summaryMessage = { role: "user", content: `[compacted] ${entry.summary}` } as AgentMessage;
 			// The summary takes the place of the range it replaces, so the items stay
 			// in the order the log has them.
-			const summary = item(collapsed[0]?.seq ?? entry.seq, summaryMessage);
+			// The summary takes the place of the range it replaces (so the items stay
+			// in the log's order), and it also carries the compaction entry's own
+			// sequence — that is how a change finds the summary and replaces it with
+			// a better one (ADR 0017).
+			const summary: ContextItem = {
+				seq: collapsed[0]?.seq ?? entry.seq,
+				seqs: [collapsed[0]?.seq ?? entry.seq, entry.seq],
+				calls: [],
+				message: summaryMessage,
+			};
 			const open = state.openAssistant;
 			const survives = open !== undefined && kept.some((candidate) => candidate.seq === open);
 			return folded(

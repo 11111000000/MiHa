@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>MiHa — the harness in a browser</title>
+		<style>
+			:root {
+				color-scheme: light dark;
+				--line: color-mix(in srgb, currentColor 20%, transparent);
+			}
+			body {
+				margin: 0;
+				padding: 1rem;
+				font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+			}
+			h1 {
+				font-size: 1rem;
+				margin: 0 0 0.25rem;
+			}
+			p.lead {
+				margin: 0 0 1rem;
+				opacity: 0.7;
+			}
+			.row {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.5rem;
+				align-items: center;
+				margin-bottom: 0.5rem;
+			}
+			input,
+			textarea,
+			button {
+				font: inherit;
+				padding: 0.35rem 0.5rem;
+				border: 1px solid var(--line);
+				border-radius: 4px;
+				background: transparent;
+				color: inherit;
+			}
+			textarea {
+				width: 24rem;
+				min-height: 2.5rem;
+				resize: vertical;
+			}
+			#key {
+				width: 22rem;
+			}
+			.panes {
+				display: grid;
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				gap: 0.75rem;
+			}
+			.pane {
+				border: 1px solid var(--line);
+				border-radius: 4px;
+				padding: 0.5rem;
+				min-height: 12rem;
+				max-height: 24rem;
+				overflow: auto;
+			}
+			.pane h2 {
+				font-size: 0.8rem;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				margin: 0 0 0.5rem;
+				opacity: 0.6;
+			}
+			.pane div {
+				white-space: pre-wrap;
+				word-break: break-word;
+			}
+			#status {
+				opacity: 0.7;
+			}
+			dialog {
+				border: 1px solid var(--line);
+				border-radius: 6px;
+				background: Canvas;
+				color: CanvasText;
+				min-width: 22rem;
+			}
+			dialog pre {
+				overflow: auto;
+				max-height: 12rem;
+			}
+			.buttons {
+				display: flex;
+				gap: 0.5rem;
+				justify-content: flex-end;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>MiHa — the harness in a browser</h1>
+		<p class="lead">
+			The harness runs in the worker; this page is the interface. The agent's tools are this
+			page's own, and every call is asked of you before it runs. The key stays in this page and
+			in the worker: it is never written to a file.
+		</p>
+
+		<div class="row">
+			<input id="key" type="password" placeholder="the provider's key" autocomplete="off" />
+			<input id="files" type="file" multiple />
+		</div>
+
+		<div class="row">
+			<textarea id="prompt" placeholder="what should the agent do?"></textarea>
+			<button id="run" type="button">run</button>
+			<button id="cancel" type="button">cancel</button>
+		</div>
+
+		<div class="row">
+			<input id="peer-task" placeholder="a task for the peer" />
+			<button id="peer-offer" type="button">offer to the peer</button>
+			<span id="status">idle</span>
+		</div>
+
+		<div class="panes">
+			<section class="pane">
+				<h2>the run</h2>
+				<div id="events"></div>
+			</section>
+			<section class="pane">
+				<h2>the journal</h2>
+				<div id="journal"></div>
+			</section>
+			<section class="pane">
+				<h2>the peer</h2>
+				<div id="peer-journal"></div>
+			</section>
+		</div>
+
+		<dialog id="approve">
+			<p>the agent wants to run <strong id="approve-tool"></strong></p>
+			<pre id="approve-args"></pre>
+			<div class="buttons">
+				<button id="approve-deny" type="button">refuse</button>
+				<button id="approve-allow" type="button">allow</button>
+			</div>
+		</dialog>
+
+		<script type="module" src="./app.js"></script>
+	</body>
+</html>

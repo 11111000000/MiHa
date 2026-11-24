@@ -89,6 +89,41 @@ export type PrepareRequest = (
 	signal: AbortSignal,
 ) => ProviderRequest | Promise<ProviderRequest>;
 
+/**
+ * The default tool timeout: 120 seconds.
+ *
+ * A tool that never settles holds the run open forever, and a peer waiting for the
+ * run waits forever too. Two minutes is the recommended minimum: our own budgets make
+ * an honest tool's work small (a result of 8 KiB, no heavy compute in a browser), and
+ * a host that knows its tool is slow says so.
+ */
+export const DEFAULT_TOOL_TIMEOUT = 120_000;
+
+/**
+ * Resolves the host's tool timeout into the one the driver enforces.
+ *
+ * `Infinity` disables the timeout. A timeout that is not a number, or a negative one,
+ * is nonsense, and nonsense gets the default.
+ */
+export function resolveToolTimeout(timeout: number | undefined): number {
+	if (timeout === undefined) return DEFAULT_TOOL_TIMEOUT;
+	if (timeout === Number.POSITIVE_INFINITY) return timeout;
+	if (Number.isNaN(timeout) || timeout <= 0) return DEFAULT_TOOL_TIMEOUT;
+	return timeout;
+}
+
+/**
+ * The host's way of summarizing what the core collapsed.
+ *
+ * The core's own digest is mechanical: one line per message, the first words of it.
+ * A host that can ask *its own* model does better, and says so here. The entries are
+ * the collapsed range — the host may read them, and return plain text.
+ */
+export type Summarize = (
+	collapsed: readonly JournalEntry[],
+	mechanical: string,
+) => string | Promise<string>;
+
 export interface HarnessHost {
 	/** Performs one provider call and streams its events. */
 	readonly callProvider: (
@@ -99,6 +134,11 @@ export interface HarnessHost {
 	readonly append?: (entry: JournalEntry) => void;
 	/** Asked before each tool runs. Absent means every planned tool runs. */
 	readonly approve?: Approve;
+	/**
+	 * Asked to summarize what the core collapsed. Absent — or a summarizer that
+	 * fails — leaves the core's mechanical digest exactly as it was (ADR 0010 D56).
+	 */
+	readonly summarize?: Summarize;
 	/** Rewrites the request in flight. Absent means the provider gets the core's request as it is. */
 	readonly prepareRequest?: PrepareRequest;
 }
@@ -127,9 +167,13 @@ export function runAgent(
 
 	const controller = new AbortController();
 	const signal = options.signal ? mergeSignals([options.signal, controller.signal]) : controller.signal;
+	const toolTimeout = resolveToolTimeout(config.toolTimeout);
 
 	let state: RunState = initialState(config);
 	const intents: Output[] = [];
+	// The entries the run wrote, recent ones first — what a host's summarizer is
+	// given when the core collapses a range (ADR 0010 D56).
+	const recent: JournalEntry[] = [];
 
 	const apply = (input: Input): void => {
 		const result = step(state, input);
@@ -169,7 +213,7 @@ export function runAgent(
 		if (options.signal?.aborted) {
 			// Cancelled before the first turn: the run still starts, and it still ends.
 			apply({ kind: "cancel" });
-			flushEntries();
+			await flushEntries();
 			return;
 		}
 
@@ -179,7 +223,7 @@ export function runAgent(
 
 			switch (intent.kind) {
 				case "append":
-					host.append?.(intent.entry);
+					await deliver(intent.entry);
 					break;
 				case "provider_request": {
 					let request = intent.request;
@@ -234,6 +278,7 @@ export function runAgent(
 				case "tool_plan":
 					await runPlan(intent.plan, {
 						signal,
+						timeout: toolTimeout,
 						approve: host.approve,
 						accept: (result) => {
 							apply({ kind: "tool_result", result });
@@ -249,7 +294,7 @@ export function runAgent(
 			}
 		}
 
-		flushEntries();
+		await flushEntries();
 	};
 
 	/**
@@ -260,11 +305,38 @@ export function runAgent(
 	 * cannot keep — so they are handed over, whether the run ended normally, was
 	 * cancelled before its first request, or the provider threw.
 	 */
-	const flushEntries = (): void => {
-		for (const intent of intents) {
-			if (intent.kind === "append") host.append?.(intent.entry);
+	/**
+	 * Hands one entry to the host, and lets a better summary replace the digest.
+	 *
+	 * The core's digest is mechanical; a host that can ask its own model writes a
+	 * better one, and says so through a `change` — the journal keeps both (ADR 0010
+	 * D56). A summarizer that fails leaves the digest exactly as it was.
+	 */
+	const deliver = async (entry: JournalEntry): Promise<void> => {
+		host.append?.(entry);
+		recent.push(entry);
+		if (recent.length > 64) recent.shift();
+		if (entry.kind !== "compaction" || host.summarize === undefined) return;
+		const collapsed = recent.filter((candidate) => candidate.seq < entry.firstKeptSeq);
+		let summary: string;
+		try {
+			summary = await host.summarize(collapsed, entry.summary);
+		} catch {
+			return;
 		}
-		intents.length = 0;
+		if (summary.length === 0) return;
+		apply({
+			kind: "change",
+			targetSeq: entry.seq,
+			content: [{ type: "text", text: `[compacted] ${summary}` }],
+		});
+	};
+
+	const flushEntries = async (): Promise<void> => {
+		const pending = intents.splice(0);
+		for (const intent of pending) {
+			if (intent.kind === "append") await deliver(intent.entry);
+		}
 	};
 
 	void (async () => {
@@ -277,7 +349,7 @@ export function runAgent(
 			}
 		} catch (error) {
 			// The provider threw: the entries the run wrote are still the host's.
-			flushEntries();
+			await flushEntries();
 			stream.fail(error);
 		} finally {
 			options.signal?.removeEventListener("abort", onAbort);
@@ -297,6 +369,8 @@ export function runAgent(
  */
 interface PlanContext {
 	readonly signal: AbortSignal;
+	/** How long a tool may take, in milliseconds. */
+	readonly timeout: number;
 	readonly approve: Approve | undefined;
 	readonly accept: (result: ToolResultMessage) => void;
 	readonly block: (call: ToolCallBlock, reason: string) => void;
@@ -354,14 +428,56 @@ async function runOne(entry: ToolCallPlan, context: PlanContext): Promise<void> 
 		}
 	}
 
+	// The tool gets a signal of its own: the run's, and the timeout's. A tool that
+	// listens is told to stop; a tool that does not is simply abandoned.
+	const call = new AbortController();
+	const stop = (): void => call.abort(signal.reason);
+	if (signal.aborted) stop();
+	else signal.addEventListener("abort", stop, { once: true });
+
 	let result: ToolResult;
 	try {
-		result = await entry.tool.execute(entry.call, args, signal, (partial) => progress(entry.call.id, partial));
+		result = await withTimeout(
+			entry.tool.execute(entry.call, args, call.signal, (partial) => progress(entry.call.id, partial)),
+			context.timeout,
+			call,
+		);
 	} catch (error) {
 		accept(failureResult(entry.call, error));
 		return;
+	} finally {
+		signal.removeEventListener("abort", stop);
 	}
 	accept(successResult(entry.call, result));
+}
+
+/**
+ * Waits for a promise, or gives up.
+ *
+ * A tool that never settles must not hold the run open forever: the call is answered
+ * with an ordinary error result, so the model reads what happened and carries on (laws
+ * M1 and M3), and the tool's own late answer is ignored — the call was answered once.
+ */
+async function withTimeout<T>(
+	promise: Promise<T>,
+	timeout: number,
+	call: AbortController,
+): Promise<T> {
+	if (!Number.isFinite(timeout)) return promise;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			promise,
+			new Promise<never>((_resolve, reject) => {
+				timer = setTimeout(() => {
+					call.abort(new Error("the tool did not finish in time"));
+					reject(new Error(`the tool did not finish within ${String(timeout)} ms`));
+				}, timeout);
+			}),
+		]);
+	} finally {
+		if (timer !== undefined) clearTimeout(timer);
+	}
 }
 
 /**

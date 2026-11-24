@@ -116,10 +116,37 @@ export type ExchangeFrame =
 	| ResultFrame
 	| CancelFrame;
 
+/**
+ * A frame the transport could not carry.
+ *
+ * The transport **reports** and does not throw: a broken link must not take the
+ * run down, and the layer above decides what a failure means (ADR 0011 D79).
+ */
+export interface TransportFailure {
+	/** What went wrong. */
+	readonly error: Error;
+	/** The frame that did not go. */
+	readonly frame: unknown;
+}
+
 /** The transport. The same shape as the worker's channel: one channel, many listeners. */
 export interface ExchangePort {
 	post(message: unknown): void;
 	onMessage(handler: (message: unknown) => void): void;
+	/**
+	 * Subscribes to the transport's failures.
+	 *
+	 * A transport that cannot carry a frame reports it here and does not throw: the
+	 * layer above decides what the failure means, and a task that cannot be
+	 * delivered ends as a failure rather than waiting for an answer that is not
+	 * coming (ADR 0011 D79). A transport with nothing to report — an in-process
+	 * queue — simply has no such channel.
+	 *
+	 * The report comes **while the frame is being sent**: the side that posted the
+	 * frame learns at once that it did not go, and it does not carry on as if it
+	 * had.
+	 */
+	onFailure?(handler: (failure: TransportFailure) => void): void;
 }
 
 const FRAME_KINDS: readonly string[] = ["offer", "accept", "refuse", "event", "result", "cancel"];

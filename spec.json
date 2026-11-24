@@ -74,7 +74,7 @@
       ],
       "falsifier": "A referenced decision label has no definition, an ADR skips or repeats a label, or an ADR contains decisions that nothing else references",
       "register": "fact",
-      "control": "printf '\\nSee D99 for the details.\\n' >> docs/adr/0002-core-harness.md",
+      "control": "printf '\\n### D200. A decision nobody references\\n\\nSome text.\\n' >> docs/adr/0002-core-harness.md",
       "waiver": null
     },
     {
@@ -892,6 +892,103 @@
         "digest": "df7aa4e7ee1151960477a06a7476525880f0046e0ab6966bc7410331f76d4fc9",
         "review": null
       }
+    },
+    {
+      "id": "exchange-transport",
+      "text": "The peer's frames travel over a WebSocket: a frame that is sent arrives once and in order, a frame that arrives is delivered to every listener and to nobody else, a frame that cannot be sent is reported rather than thrown, and a closed port sends nothing and delivers nothing more.",
+      "scope": [
+        "src/exchange/",
+        "test/exchange-transport.test.ts"
+      ],
+      "owner": "petr p.b.kosov@yandex.ru",
+      "requirements": [
+        {
+          "kind": "verifier",
+          "spec": "bun test test/exchange-transport.test.ts"
+        }
+      ],
+      "falsifier": "a frame delivered twice or out of order, a listener receiving another task's frame, a broken socket throwing into the run, or a closed port still delivering",
+      "register": "fact",
+      "control": "sed -i 's/report({ error: asError(error), frame: message });/throw asError(error);/' src/exchange/websocket.ts",
+      "waiver": null
+    },
+    {
+      "id": "exchange-failure-ends-the-task",
+      "text": "A transport that reports that a frame could not be carried ends the task on both sides: the delegating side and the receiving side resolve it as a failure that says the peer could not be reached, and a run does not start on a peer that never heard the accept.",
+      "scope": [
+        "src/exchange/",
+        "test/exchange-transport.test.ts"
+      ],
+      "owner": "petr p.b.kosov@yandex.ru",
+      "requirements": [
+        {
+          "kind": "verifier",
+          "spec": "bun test test/exchange-transport.test.ts"
+        }
+      ],
+      "falsifier": "a task that waits for an answer that is not coming, or a run that starts on a peer that never heard the accept",
+      "register": "fact",
+      "control": "sed -i 's/port.onFailure?.((failure) => {/port.onFailure?.(() => {/' src/exchange/delegate.ts",
+      "waiver": null
+    },
+    {
+      "id": "browser-example",
+      "text": "The harness runs in a browser: an example application embeds it in a worker, the agent calls the application's own tools through the bridge, a refusal asks the human and the run continues, the journal reaches the page as it is written, and the whole example bundles well inside the ceiling.",
+      "scope": [
+        "examples/browser/",
+        "test/browser-example.test.ts"
+      ],
+      "owner": "petr p.b.kosov@yandex.ru",
+      "requirements": [
+        {
+          "kind": "verifier",
+          "spec": "bun test test/browser-example.test.ts"
+        }
+      ],
+      "falsifier": "the example not bundling, the bundle over the ceiling, the agent calling a tool the page never offered, a refusal the human cannot answer, or the journal never reaching the page",
+      "register": "fact",
+      "control": "sed -i 's|append: (entry) => channel.post(journalFrame(entry)),|append: (entry) => { void entry; },|' examples/browser/worker.ts",
+      "waiver": null
+    },
+    {
+      "id": "tool-timeout",
+      "text": "A tool call cannot hold the run open forever: the driver answers a call that outlives the tool timeout with an ordinary error result, tells the tool through its signal, and ignores the tool's late answer - and a call that finishes in time is untouched.",
+      "scope": [
+        "src/core/loop.ts",
+        "src/core/run.ts",
+        "test/tool-timeout.test.ts"
+      ],
+      "owner": "petr p.b.kosov@yandex.ru",
+      "requirements": [
+        {
+          "kind": "verifier",
+          "spec": "bun test test/tool-timeout.test.ts"
+        }
+      ],
+      "falsifier": "a call that outlives the timeout left unanswered, the tool's late answer producing a second answer, the tool not being told, or a call that finishes in time being disturbed",
+      "register": "fact",
+      "control": "sed -i 's/reject(new Error(`the tool did not finish within ${String(timeout)} ms`));/resolve({ content: [] });/' src/core/loop.ts",
+      "waiver": null
+    },
+    {
+      "id": "host-digest",
+      "text": "A host that can summarize better does: when the core collapses a range, the driver asks the host for a summary of what it collapsed and applies a change, so the model reads the host's summary instead of the mechanical digest - while the journal keeps both, and a host without a summarizer, or one that fails, leaves the mechanical digest exactly as it was.",
+      "scope": [
+        "src/core/loop.ts",
+        "src/core/journal.ts",
+        "test/host-digest.test.ts"
+      ],
+      "owner": "petr p.b.kosov@yandex.ru",
+      "requirements": [
+        {
+          "kind": "verifier",
+          "spec": "bun test test/host-digest.test.ts"
+        }
+      ],
+      "falsifier": "the host's summary never reaching the model, the mechanical digest being replaced by something else, the journal losing the collapsed range, or a failing summarizer breaking the run",
+      "register": "fact",
+      "control": "sed -i 's/summary = await host.summarize(collapsed, entry.summary);/summary = entry.summary;/' src/core/loop.ts",
+      "waiver": null
     }
   ]
 }

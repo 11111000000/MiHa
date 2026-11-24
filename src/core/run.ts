@@ -124,6 +124,11 @@ export interface HarnessConfig {
 	 */
 	readonly journalWindow?: number;
 	/**
+	 * How long a tool call may take, in milliseconds. The default is 120 000 — two
+	 * minutes; `Infinity` disables the deadline (ADR 0017).
+	 */
+	readonly toolTimeout?: number;
+	/**
 	 * How many bytes of text the model's context may hold. The core collapses what
 	 * does not fit (ADR 0010 D54); the default is 128 KiB — twice the size of a
 	 * median task.

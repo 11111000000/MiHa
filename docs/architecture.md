@@ -166,6 +166,7 @@ The journal is the trace; the cassette holds only what the journal cannot.
 | `tools` | pure functions over validated arguments | widen a schema, re-parse arguments |
 | `approve` | the policy — may ask a human | run a tool the core did not plan |
 | `prepareRequest` | rewrite the request in flight — elide a stale result, switch the model for a turn ([ADR 0013](./adr/0013-request-seam.md) D70) | reorder the journal |
+| `summarize()` | write a better digest of what the core collapsed ([ADR 0017](./adr/0017-tool-timeout-and-host-digest.md) D100) | rewrite the history |
 | `persist` | where entries live | edit an entry |
 | capabilities | what a worker may reach: the DOM, storage | grant past the realm's end |
 | the peer link | a task, in either direction | call the other side's tools |
@@ -251,7 +252,10 @@ the context, one result — are all bounded by a number.
 | `ui/` | the registry, the flat spec, the patches, the tree | 407 | ~800 |
 | | | **1 909** | **≈3 350** |
 
-**Bundle: 5 103 B gzip now, ≈12–14 KB projected.** Zero runtime dependencies.
+**Bundle: 8 102 B gzip for the core, 9 708 B with the provider layer** (measured by
+`scripts/check-budget.mjs`), and **14 458 B** for the whole browser example in
+`examples/browser/` — the page, the worker and the harness together. The ceiling is
+30 000 B. Zero runtime dependencies.
 Resident memory O(window + context + one result), by law.
 
 ---

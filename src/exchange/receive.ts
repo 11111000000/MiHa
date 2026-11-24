@@ -135,6 +135,14 @@ export function receive(options: ReceiveOptions): ReceivedTask {
 	/** Whether the task is over: the peer was told, and the outcome settled. */
 	let over = false;
 
+	/**
+	 * The transport's failure, when it reported one.
+	 *
+	 * A transport that reports a failure has not carried the frame, and the frame
+	 * is gone: the task must not go on as if it had (ADR 0011 D79).
+	 */
+	let broken: Error | undefined;
+
 	/** Settles the outcome and closes the entries. */
 	const settleOutcome = (result: Outcome): void => {
 		settle?.(result);
@@ -153,15 +161,17 @@ export function receive(options: ReceiveOptions): ReceivedTask {
 	 * Posts a frame to the peer, and hands back the failure when there is one.
 	 *
 	 * The transport's failure is not hidden here: the caller decides what a frame
-	 * that did not go means.
+	 * that did not go means. A transport that *throws* is one kind of failure, and
+	 * a transport that *reports* one is the other — and both are the same thing
+	 * here: the frame did not go (ADR 0011 D79).
 	 */
 	const post = (frame: ExchangeFrame): Error | undefined => {
 		try {
 			port.post(frame);
-			return undefined;
 		} catch (error) {
 			return error instanceof Error ? error : new Error(String(error));
 		}
+		return broken;
 	};
 
 	/**
@@ -422,6 +432,19 @@ export function receive(options: ReceiveOptions): ReceivedTask {
 				// The delegating side's frames. This side has nothing to do with them.
 				return;
 		}
+	});
+
+	/**
+	 * A transport that cannot carry a frame ends the task.
+	 *
+	 * The peer is owed an answer, and a transport that has failed cannot answer:
+	 * the task ends as a failure that says the peer could not be reached
+	 * (ADR 0011 D79). The transport reports the failure rather than throwing it,
+	 * so this is where it is decided.
+	 */
+	port.onFailure?.((failure) => {
+		broken ??= failure.error;
+		fail(`the peer could not be reached: ${failure.error.message}`);
 	});
 
 	return {

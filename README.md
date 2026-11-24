@@ -27,7 +27,7 @@ Measured, for the browser target, minified and gzipped:
 | | gzip | Of the 30 KB ceiling |
 |---|---|---|
 | `@earendil-works/pi-agent-core` | **22 638 B** | 76 % |
-| MiHa's core | **5 103 B** | 17 % |
+| MiHa's core | **8 102 B** | 27 % |
 | MiHa's core + the provider layer | **6 523 B** | 22 % |
 
 Pi's core does not fit the ceiling: the layers MiHa still needs on top of it — the
