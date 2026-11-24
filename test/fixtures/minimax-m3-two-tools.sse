@@ -1,0 +1,22 @@
+data: {"id":"075468cc7db396c5e274a55315d79eaf","choices":[{"index":0,"delta":{"role":"assistant"}}],"created":1795503565,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075468cc7db396c5e274a55315d79eaf","choices":[{"index":0,"delta":{"content":"I'll","role":"assistant"}}],"created":1795503565,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075468cc7db396c5e274a55315d79eaf","choices":[{"index":0,"delta":{"content":" check the weather for both cities.","role":"assistant"}}],"created":1795503565,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075468cc7db396c5e274a55315d79eaf","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"id":"call_gTgzn1l638OawEqFUEQjZbpZ","type":"function","function":{"name":"get_weather","arguments":""},"index":0}]}}],"created":1795503565,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075468cc7db396c5e274a55315d79eaf","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"function":{"arguments":"{\"city\": "},"index":0}]}}],"created":1795503565,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075468cc7db396c5e274a55315d79eaf","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"function":{"arguments":"\"Beijing\"}"},"index":0}]}}],"created":1795503565,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075468cc7db396c5e274a55315d79eaf","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"id":"call_WqOiX4jOI3CTh87ss7jaECAX","type":"function","function":{"name":"get_weather","arguments":""},"index":1}]}}],"created":1795503565,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075468cc7db396c5e274a55315d79eaf","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"function":{"arguments":"{\"city\": \"Oslo"},"index":1}]}}],"created":1795503565,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075468cc7db396c5e274a55315d79eaf","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"function":{"arguments":"\"}"},"index":1}]}}],"created":1795503565,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075468cc7db396c5e274a55315d79eaf","choices":[{"finish_reason":"tool_calls","index":0,"delta":{"role":"assistant"}}],"created":1795503565,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075468cc7db396c5e274a55315d79eaf","choices":[],"created":1795503564,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":{"total_tokens":571,"total_characters":0,"prompt_tokens":511,"completion_tokens":60,"completion_tokens_details":{"reasoning_tokens":0},"prompt_tokens_details":{"cached_tokens":185}},"service_tier":"standard","base_resp":{"status_code":0,"status_msg":""}}
+

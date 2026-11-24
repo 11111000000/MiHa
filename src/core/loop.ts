@@ -72,6 +72,22 @@ export interface ApproveContext {
  */
 export type Approve = (context: ApproveContext) => Promise<ApproveDecision>;
 
+/**
+ * The request seam (ADR 0006 D35).
+ *
+ * The host may rewrite the request in flight: elide a stale result, switch the model
+ * for one turn, attach a deadline, force a compaction. The driver calls the seam
+ * between "the core emitted a `provider_request`" and "the provider performs it", and
+ * the provider receives exactly what the seam returned.
+ *
+ * The seam may be synchronous or asynchronous, and it is given the run's signal — so
+ * a host can see the abort and stop waiting.
+ */
+export type PrepareRequest = (
+	request: ProviderRequest,
+	signal: AbortSignal,
+) => ProviderRequest | Promise<ProviderRequest>;
+
 export interface HarnessHost {
 	/** Performs one provider call and streams its events. */
 	readonly callProvider: (
@@ -82,6 +98,8 @@ export interface HarnessHost {
 	readonly append?: (entry: JournalEntry) => void;
 	/** Asked before each tool runs. Absent means every planned tool runs. */
 	readonly approve?: Approve;
+	/** Rewrites the request in flight. Absent means the provider gets the core's request as it is. */
+	readonly prepareRequest?: PrepareRequest;
 }
 
 export interface RunOptions {
@@ -156,14 +174,32 @@ export function runAgent(
 				case "append":
 					host.append?.(intent.entry);
 					break;
-				case "provider_request":
-					for await (const event of host.callProvider(intent.request, signal)) {
+				case "provider_request": {
+					let request = intent.request;
+					if (host.prepareRequest) {
+						try {
+							request = await host.prepareRequest(request, signal);
+						} catch (error) {
+							// The seam's failure is the provider's failure: it becomes an
+							// event, so the run reports it and the pairing survives (law M1).
+							apply({
+								kind: "provider",
+								event: {
+									type: "error",
+									message: `the request could not be prepared: ${messageOf(error)}`,
+								},
+							});
+							break;
+						}
+					}
+					for await (const event of host.callProvider(request, signal)) {
 						apply({ kind: "provider", event });
 						// The run is over — cancelled, or the last turn — so the rest of
 						// the provider's stream is of no interest.
 						if (phase() === "finished") break;
 					}
 					break;
+				}
 				case "tool_plan":
 					await runPlan(intent.plan, {
 						signal,
@@ -295,6 +331,16 @@ async function runOne(entry: ToolCallPlan, context: PlanContext): Promise<void> 
 		return;
 	}
 	accept(successResult(entry.call, result));
+}
+
+/**
+ * The message of a thrown value.
+ *
+ * A host that throws is reported the way the provider's own failures are reported:
+ * as a sentence the run can carry.
+ */
+function messageOf(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
 }
 
 /**

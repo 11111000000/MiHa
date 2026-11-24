@@ -9,6 +9,10 @@
  * event all arrive as an error event. That is not politeness: the core's pairing
  * invariant says every tool call is answered, and a thrown exception from the
  * provider would leave a call unanswered in the transcript.
+ *
+ * A stream is finished when the provider says so: the `[DONE]` marker, or a chunk
+ * that carries a finish reason. Not every provider sends the marker — MiniMax does
+ * not — and a stream that says nothing about its ending was cut short.
  */
 
 import { emptyUsage, type AgentMessage, type ContentBlock, type Usage } from "../core/messages.ts";
@@ -128,6 +132,42 @@ function stopReasonOf(finishReason: unknown): "stop" | "length" | "toolUse" {
 	return "stop";
 }
 
+/** The usage as the wire reports it. */
+interface WireUsage {
+	readonly input?: number;
+	readonly output?: number;
+	readonly prompt_tokens?: number;
+	readonly completion_tokens?: number;
+	readonly cacheRead?: number;
+	readonly cacheWrite?: number;
+	readonly reasoning?: number;
+	readonly completion_tokens_details?: { readonly reasoning_tokens?: number };
+	readonly prompt_tokens_details?: { readonly cached_tokens?: number };
+}
+
+/**
+ * The usage as the core counts it.
+ *
+ * The OpenAI-compatible wire spells the counts `prompt_tokens` and
+ * `completion_tokens` — MiniMax follows it — and some gateways spell them `input`
+ * and `output` instead, so both are read and the standard spelling wins.
+ *
+ * The reasoning tokens are a **part** of the completion tokens, not an addition to
+ * them: the wire counts them in `completion_tokens` and names them in
+ * `completion_tokens_details.reasoning_tokens`. The cached prompt tokens are the
+ * ones the provider read from its cache, which is what the core calls a cache
+ * read.
+ */
+function usageOf(wire: WireUsage): Usage {
+	return {
+		input: wire.prompt_tokens ?? wire.input ?? 0,
+		output: wire.completion_tokens ?? wire.output ?? 0,
+		cacheRead: wire.prompt_tokens_details?.cached_tokens ?? wire.cacheRead ?? 0,
+		cacheWrite: wire.cacheWrite ?? 0,
+		reasoning: wire.completion_tokens_details?.reasoning_tokens ?? wire.reasoning ?? 0,
+	};
+}
+
 /**
  * Creates an OpenAI-compatible provider.
  *
@@ -199,7 +239,7 @@ export function openaiCompat(options: OpenAiCompatOptions): ProviderFn {
 							}[];
 						};
 					}[];
-					usage?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
+					usage?: WireUsage;
 				};
 				try {
 					chunk = JSON.parse(data);
@@ -212,15 +252,13 @@ export function openaiCompat(options: OpenAiCompatOptions): ProviderFn {
 				const choice = chunk.choices?.[0];
 				if (choice?.finish_reason !== undefined && choice.finish_reason !== null) {
 					stopReason = stopReasonOf(choice.finish_reason);
+					// The provider said the message is finished. Not every provider
+					// sends the `[DONE]` marker — MiniMax does not — so the finish
+					// reason is what makes a stream terminal.
+					sawTerminal = true;
 				}
 				if (chunk.usage) {
-					usage = {
-						input: chunk.usage.input ?? 0,
-						output: chunk.usage.output ?? 0,
-						cacheRead: chunk.usage.cacheRead ?? 0,
-						cacheWrite: chunk.usage.cacheWrite ?? 0,
-						reasoning: 0,
-					};
+					usage = usageOf(chunk.usage);
 				}
 
 				const delta = choice?.delta;

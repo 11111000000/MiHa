@@ -128,6 +128,12 @@ The only effectful part. For each intent:
 It races the cancellation throughout: an aborted signal ends the run at the next
 boundary with every in-flight call answered.
 
+The provider layer speaks the OpenAI-compatible wire, and **MiniMax-M3** is the model it
+was measured against: its thinking arrives in a separate field only when asked for
+(`reasoning_split`), its stream ends on a `finish_reason` rather than on `[DONE]`, and
+its usage is counted in the wire's own spelling ([ADR 0014](./adr/0014-minimax.md)
+D71–D76).
+
 ### 2.5 The peer, on both sides
 
 The exchange is symmetric: the delegating side offers a task, and the **receiving
@@ -146,7 +152,7 @@ The journal is the trace; the cassette holds only what the journal cannot.
 | `callProvider` | the model, the transport | see the core's state |
 | `tools` | pure functions over validated arguments | widen a schema, re-parse arguments |
 | `approve` | the policy — may ask a human | run a tool the core did not plan |
-| `prepareRequest` | in-flight request rewriting | reorder the journal |
+| `prepareRequest` | rewrite the request in flight — elide a stale result, switch the model for a turn ([ADR 0013](./adr/0013-request-seam.md) D70) | reorder the journal |
 | `persist` | where entries live | edit an entry |
 | capabilities | what a worker may reach: the DOM, storage | grant past the realm's end |
 | the peer link | a task, in either direction | call the other side's tools |
@@ -225,7 +231,7 @@ the context, one result — are all bounded by a number.
 |---|---|---|---|
 | `core/` | the journal, the projection, the state machine, the driver, the tool contract | 1 006 | ~1 300 |
 | `schema/` | the tool-parameter dialect | 258 | 258 |
-| `llm/` | the SSE reader, the call tracker, one adapter | 313 | ~450 |
+| `llm/` | the SSE reader, the call tracker, one adapter | 328 | ~450 |
 | `exchange/` | the peer protocol, both directions | 279 | ~350 |
 | `worker/` | the capability bridge, the realm host | 181 | ~250 |
 | `trace/` | the cassette — the provider responses only | 158 | ~180 |

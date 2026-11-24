@@ -1,0 +1,20 @@
+data: {"id":"075467e750b9d62d48d03ea8f32d23e6","choices":[{"index":0,"delta":{"content":"","role":"assistant"}}],"created":1795503335,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075467e750b9d62d48d03ea8f32d23e6","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"The user just said \"hi\". I","reasoning_details":[{"type":"reasoning.text","id":"reasoning-text-1","format":"MiniMax-response-v1","index":0,"text":"The user just said \"hi\". I"}]}}],"created":1795503335,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075467e750b9d62d48d03ea8f32d23e6","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":" should respond in a friendly,","reasoning_details":[{"type":"reasoning.text","id":"reasoning-text-1","format":"MiniMax-response-v1","index":0,"text":" should respond in a friendly,"}]}}],"created":1795503335,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075467e750b9d62d48d03ea8f32d23e6","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":" brief way. No tools needed. Just","reasoning_details":[{"type":"reasoning.text","id":"reasoning-text-1","format":"MiniMax-response-v1","index":0,"text":" brief way. No tools needed. Just"}]}}],"created":1795503335,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075467e750b9d62d48d03ea8f32d23e6","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":" greet them","reasoning_details":[{"type":"reasoning.text","id":"reasoning-text-1","format":"MiniMax-response-v1","index":0,"text":" greet them"}]}}],"created":1795503335,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075467e750b9d62d48d03ea8f32d23e6","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":" and offer help.","reasoning_details":[{"type":"reasoning.text","id":"reasoning-text-1","format":"MiniMax-response-v1","index":0,"text":" and offer help."}]}}],"created":1795503335,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075467e750b9d62d48d03ea8f32d23e6","choices":[{"index":0,"delta":{"content":"Hi! How can I hel","role":"assistant"}}],"created":1795503335,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075467e750b9d62d48d03ea8f32d23e6","choices":[{"index":0,"delta":{"content":"p you today?","role":"assistant"}}],"created":1795503335,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075467e750b9d62d48d03ea8f32d23e6","choices":[{"finish_reason":"stop","index":0,"delta":{"role":"assistant"}}],"created":1795503335,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":null,"service_tier":"standard"}
+
+data: {"id":"075467e750b9d62d48d03ea8f32d23e6","choices":[],"created":1795503335,"model":"MiniMax-M3","object":"chat.completion.chunk","usage":{"total_tokens":252,"total_characters":0,"prompt_tokens":212,"completion_tokens":40,"completion_tokens_details":{"reasoning_tokens":30},"prompt_tokens_details":{"cached_tokens":128}},"service_tier":"standard","base_resp":{"status_code":0,"status_msg":""}}
+
