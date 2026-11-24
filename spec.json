@@ -987,7 +987,7 @@
       ],
       "falsifier": "the host's summary never reaching the model, the mechanical digest being replaced by something else, the journal losing the collapsed range, or a failing summarizer breaking the run",
       "register": "fact",
-      "control": "sed -i 's/summary = await host.summarize(collapsed, entry.summary);/summary = entry.summary;/' src/core/loop.ts",
+      "control": "sed -i 's/Promise.resolve(host.summarize(collapsed, entry.summary))/Promise.resolve(entry.summary)/' src/core/loop.ts",
       "waiver": null
     }
   ]

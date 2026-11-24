@@ -92,8 +92,17 @@ export function createWebSocketPort(socket: ExchangeSocket): WebSocketPort {
 	/** Tells the layer above that a frame did not go. */
 	const report = (failure: TransportFailure): void => {
 		// A copy: a handler joins from now on, and it has not heard about the
-		// failures that came before it.
-		for (const handler of [...failures]) handler(failure);
+		// failures that came before it. A handler that throws must not make the
+		// port throw: the port's law is that it reports, never that it raises
+		// (ADR 0011 D79).
+		for (const handler of [...failures]) {
+			try {
+				handler(failure);
+			} catch {
+				// The handler is broken; the frame is still lost, and the run must
+				// not die of it.
+			}
+		}
 	};
 
 	return {
@@ -134,7 +143,15 @@ export function createWebSocketPort(socket: ExchangeSocket): WebSocketPort {
 			const message = decode(data);
 			// The live list, like the worker's channel: a listener that closes the
 			// port empties the list, and the delivery stops there.
-			for (const listener of listeners) listener(message);
+			for (const listener of [...listeners]) {
+			// A listener that throws must not stop the delivery to the others: the
+			// frame reached the port, and it reaches everyone (ADR 0017 D100).
+			try {
+				listener(message);
+			} catch {
+				// This listener is broken; the others still hear the frame.
+			}
+		}
 		},
 
 		close(): void {

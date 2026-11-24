@@ -14,7 +14,15 @@
  * example's own two halves against each other:
  *
  * - the example's sources exist, and they are wired to the harness's **public
- *   API** — the barrels, and nothing below them;
+ *   API** — the barrels, and nothing below them, in every form an import
+ *   takes, and in the document's own scripts;
+ * - the files the browser loads ask for nothing the browser cannot load, and the
+ *   page's own tools stay the page's — the worker reaches them through the
+ *   bridge, never through an import, whatever spelling the import wears;
+ * - the key is asked for in the page and is written down nowhere: no storage, no
+ *   cookie, and no key in any file of the example, whatever the file is;
+ * - the page names only elements the document has, and it loads only scripts the
+ *   ceiling measures;
  * - the build produces bundles whose gzipped size is under the ceiling — the number
  *   the budget check enforces, measured on the example rather than on a synthetic
  *   entry that re-exports the barrels;
@@ -22,17 +30,18 @@
  *   sends, the other side accepts;
  * - and the whole round trip runs — the agent's tools are the page's own, a call
  *   reaches the page's capability through the bridge, a refusal asks the human and
- *   the run continues, and the journal reaches the page as it is written.
+ *   the run continues, a question the human cannot answer is refused anyway, and
+ *   the journal reaches the page as it is written.
  *
  * The provider answers from a script instead of from a network: the evidence copy
  * has no key and no socket, and a live provider is not a verifier.
  */
 
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import type {
 	AgentEvent,
 	JournalEntry,
@@ -102,6 +111,31 @@ const PUBLIC_API = new Set([
 	"src/worker/protocol.ts",
 ]);
 
+/**
+ * The bundles the ceiling measures: the page's script and the worker's script.
+ *
+ * They are what a browser downloads, so they are what the ceiling is about. A
+ * script the page loads that is not one of them is not measured — and the
+ * ceiling would then be a number about something the browser never fetched.
+ */
+const BUNDLES = ["app.js", "worker.js"] as const;
+
+/**
+ * What a key in a file looks like.
+ *
+ * The key lives in memory and nowhere else: no storage, no cookie, and no key
+ * written into a source. The patterns are the four ways a key leaves memory,
+ * and the shape a provider's key has.
+ */
+const KEY_PATTERNS = [
+	/localStorage/,
+	/sessionStorage/,
+	/indexedDB/,
+	/document\s*\.\s*cookie/,
+	/document\s*\[\s*["']cookie["']\s*\]/,
+	/sk-[A-Za-z0-9_-]{8,}/,
+] as const;
+
 /** The example's sources, by name. */
 const SOURCES = [
 	"index.html",
@@ -118,13 +152,189 @@ const SOURCES = [
 	"smoke.sh",
 ] as const;
 
-/** The import specifiers of one source. */
+/**
+ * The forms an import takes, and the specifier each one carries.
+ *
+ * A static import, a bare import, a dynamic import and a `require` are four
+ * spellings of one thing. A scan that misses one of them is a scan with a hole
+ * in it: a module reached dynamically is reached, and a module reached that way
+ * is just as much a part of the example as one reached by a declaration.
+ *
+ * A template literal counts as a spelling too — `import(`./tools.js`)` reaches
+ * the same file as `import("./tools.js")` does.
+ */
+const IMPORT_FORMS = [
+	/\bfrom\s+["'`]([^"'`]+)["'`]/g,
+	/\bimport\s+["'`]([^"'`]+)["'`]/g,
+	/\bimport\s*\(\s*["'`]([^"'`]+)["'`]\s*\)/g,
+	/\brequire\s*\(\s*["'`]([^"'`]+)["'`]\s*\)/g,
+] as const;
+
+/** The import specifiers of one source, in the order the source names them. */
+function specifiersOf(text: string): readonly string[] {
+	const found: { readonly at: number; readonly specifier: string }[] = [];
+	for (const form of IMPORT_FORMS) {
+		for (const match of text.matchAll(form)) {
+			found.push({ at: match.index ?? 0, specifier: match[1] as string });
+		}
+	}
+	return found
+		.sort((left, right) => left.at - right.at)
+		.map((entry) => entry.specifier);
+}
+
+/** The import specifiers of one file. */
 function importsOf(file: string): readonly string[] {
-	const text = readFileSync(file, "utf8");
+	return specifiersOf(readFileSync(file, "utf8"));
+}
+
+/**
+ * The file a relative specifier names, if the tree has it.
+ *
+ * A `.js` specifier may name a `.ts` file: that is the TypeScript convention,
+ * and the one a bundler follows. The resolution says which file is meant — the
+ * spelling says nothing, and a rule written against a spelling is a rule that
+ * one more spelling walks around.
+ */
+function resolveSpecifier(from: string, specifier: string): string | undefined {
+	const base = resolve(dirname(from), specifier);
+	const candidates: string[] = [base];
+	for (const extension of [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]) {
+		candidates.push(`${base}${extension}`);
+	}
+	for (const extension of [".js", ".mjs", ".cjs"]) {
+		if (base.endsWith(extension)) {
+			candidates.push(`${base.slice(0, -extension.length)}.ts`);
+		}
+	}
+	candidates.push(join(base, "index.ts"), join(base, "index.js"));
+	for (const candidate of candidates) {
+		if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+	}
+	return undefined;
+}
+
+/**
+ * The files the browser loads: the two bundle entries and everything they reach.
+ *
+ * The bundle's entries are the page's script and the worker's script, and the
+ * files they import are theirs. A file nothing reaches — the example's own
+ * measurement script, its own test — is the toolchain's business and not the
+ * browser's, and a rule about the browser must not become a rule about the
+ * tools that build it.
+ */
+function browserFiles(): readonly string[] {
+	const seen = new Set<string>();
+	const walk = (file: string): void => {
+		if (seen.has(file)) return;
+		seen.add(file);
+		for (const specifier of importsOf(file)) {
+			if (!specifier.startsWith(".")) continue;
+			const target = resolveSpecifier(file, specifier);
+			if (target !== undefined) walk(target);
+		}
+	};
+	walk(join(EXAMPLE, "page.entry.ts"));
+	walk(join(EXAMPLE, "worker.entry.ts"));
+	return [...seen];
+}
+
+/** Every file under a directory, by path. */
+function everyFileOf(dir: string): readonly string[] {
 	const found: string[] = [];
-	for (const match of text.matchAll(/\bfrom\s+"([^"]+)"/g)) found.push(match[1] as string);
-	for (const match of text.matchAll(/\bimport\s+"([^"]+)"/g)) found.push(match[1] as string);
+	for (const entry of readdirSync(dir, { withFileTypes: true })) {
+		const full = join(dir, entry.name);
+		if (entry.isDirectory()) found.push(...everyFileOf(full));
+		else found.push(full);
+	}
 	return found;
+}
+
+/**
+ * The scripts the document loads.
+ *
+ * A `<script src>` is one, and so is a module the document asks the browser to
+ * fetch ahead of time: the browser downloads it either way, and a file nobody
+ * measured is a file nobody counted.
+ */
+function scriptsOf(html: string): readonly string[] {
+	const found: string[] = [];
+	for (const match of html.matchAll(/<script\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/g)) {
+		found.push(match[1] as string);
+	}
+	for (const match of html.matchAll(/<link\b[^>]*\brel\s*=\s*["']modulepreload["'][^>]*>/g)) {
+		const href = /\bhref\s*=\s*["']([^"']+)["']/.exec(match[0] as string);
+		if (href) found.push(href[1] as string);
+	}
+	return found;
+}
+
+/**
+ * The scripts written into the document, as the document writes them.
+ *
+ * The prose of a page is not code, and a scan that read it would read a
+ * sentence as a declaration. The scripts are the code.
+ */
+function inlineScriptsOf(html: string): readonly string[] {
+	const found: string[] = [];
+	for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)) {
+		if (/\bsrc\s*=/.test(match[1] as string)) continue;
+		found.push(match[2] as string);
+	}
+	return found;
+}
+
+/** The scripts the page starts as a worker. */
+function workerScriptsOf(text: string): readonly string[] {
+	const found: string[] = [];
+	for (const match of text.matchAll(/new\s+Worker\s*\(\s*["']([^"']+)["']/g)) {
+		found.push(match[1] as string);
+	}
+	return found;
+}
+
+/**
+ * The ids the page names, in every form it may name one.
+ *
+ * `byId` is the page's own helper, `getElementById` is the document's, and
+ * `querySelector("#x")` is the same id written as a selector. A page that names
+ * an element the document does not have is a page that throws on the first
+ * click.
+ */
+function idsOf(text: string): readonly string[] {
+	const found: string[] = [];
+	for (const match of text.matchAll(/\bbyId\(\s*["']([^"']+)["']\s*\)/g)) {
+		found.push(match[1] as string);
+	}
+	for (const match of text.matchAll(/\bgetElementById\(\s*["']([^"']+)["']\s*\)/g)) {
+		found.push(match[1] as string);
+	}
+	for (const match of text.matchAll(/\bquerySelector(?:All)?\(\s*["']#([^"']+)["']/g)) {
+		found.push(match[1] as string);
+	}
+	return found;
+}
+
+/** The ids the document has. */
+function idsIn(html: string): readonly string[] {
+	const found: string[] = [];
+	for (const match of html.matchAll(/\bid\s*=\s*["']([^"']+)["']/g)) {
+		found.push(match[1] as string);
+	}
+	return found;
+}
+
+/**
+ * Whether a specifier names the page's tools, whatever spelling it uses.
+ *
+ * The worker may not import the page's tools: the page owns them, and a worker
+ * that called them directly would not be using the bridge. The rule is about
+ * the module, and a rule about the module is not a rule about the way the
+ * module happens to be written down.
+ */
+function namesTools(specifier: string): boolean {
+	const segment = specifier.split("/").pop() ?? "";
+	return segment.replace(/\.[^.]+$/, "") === "tools";
 }
 
 /**
@@ -199,6 +409,20 @@ interface CapabilityCall {
 	readonly args: unknown;
 }
 
+/**
+ * One thing the page saw, in the order it saw it.
+ *
+ * The page's callbacks are the only witness to the order: the journal's
+ * contents say what arrived, and this says when. A journal that was buffered
+ * and flushed at the end has the same contents and a different order, and the
+ * difference is the whole of "as it is written".
+ */
+interface Step {
+	readonly kind: "journal" | "peer_journal" | "event" | "note";
+	/** The event's own type, when the step is an event. */
+	readonly type?: string;
+}
+
 /** The two halves of the example, wired to each other over an in-memory channel. */
 interface Wire {
 	readonly page: ReturnType<typeof createPageApp>;
@@ -209,6 +433,7 @@ interface Wire {
 	readonly notes: readonly string[];
 	readonly asked: readonly ApprovalRequest[];
 	readonly calls: readonly CapabilityCall[];
+	readonly steps: readonly Step[];
 	readonly finished: Promise<Outcome>;
 	readonly peerFinished: Promise<Outcome>;
 }
@@ -231,6 +456,7 @@ function wire(options: {
 	const notes: string[] = [];
 	const asked: ApprovalRequest[] = [];
 	const calls: CapabilityCall[] = [];
+	const steps: Step[] = [];
 
 	let settleRun: (outcome: Outcome) => void = () => {};
 	const finished = new Promise<Outcome>((resolve) => {
@@ -285,13 +511,16 @@ function wire(options: {
 		},
 		onJournal: (entry) => {
 			journal.push(entry);
+			steps.push({ kind: "journal" });
 		},
 		onPeerJournal: (entry) => {
 			peerJournal.push(entry);
+			steps.push({ kind: "peer_journal" });
 		},
 		onPeerOutcome: (_taskId, outcome) => settlePeer(outcome),
 		onNote: (text) => {
 			notes.push(text);
+			steps.push({ kind: "note" });
 		},
 	});
 
@@ -299,6 +528,7 @@ function wire(options: {
 		capabilities: watched,
 		onEvent: (event) => {
 			events.push(event);
+			steps.push({ kind: "event", type: event.type });
 			if (event.type === "agent_end") settleRun(event.outcome);
 		},
 		onOtherFrame: (frame) => {
@@ -317,7 +547,19 @@ function wire(options: {
 	};
 	const worker = createWorkerApp(channel, { provider: options.provider });
 
-	return { page, worker, events, journal, peerJournal, notes, asked, calls, finished, peerFinished };
+	return {
+		page,
+		worker,
+		events,
+		journal,
+		peerJournal,
+		notes,
+		asked,
+		calls,
+		steps,
+		finished,
+		peerFinished,
+	};
 }
 
 /**
@@ -349,17 +591,42 @@ describe("the example's sources", () => {
 		}
 	});
 
+	test("the import scan sees every form of an import", () => {
+		// A scan that reads one spelling is a scan with a hole in it: a module
+		// reached dynamically is reached, and a module reached that way is just as
+		// much a part of the example as one reached by a declaration.
+		const text = [
+			'import { one } from "./one.ts";',
+			'import "./two.ts";',
+			'const three = await import("./three.ts");',
+			'const four = require("./four.ts");',
+		].join("\n");
+		expect(specifiersOf(text)).toEqual(["./one.ts", "./two.ts", "./three.ts", "./four.ts"]);
+	});
+
 	test("the example reaches the harness only through its public API", () => {
 		const files = readdirSync(EXAMPLE).filter(
 			(name) => name.endsWith(".ts") || name.endsWith(".mjs"),
 		);
 		expect(files.length).toBeGreaterThan(0);
 
+		// The document is one of the example's sources too: a script written into
+		// the page is a script the page runs, and it may not reach into the
+		// harness's internals either.
+		const sources: readonly (readonly [string, string])[] = [
+			...files.map(
+				(name): readonly [string, string] => [name, readFileSync(join(EXAMPLE, name), "utf8")],
+			),
+			...inlineScriptsOf(readFileSync(join(EXAMPLE, "index.html"), "utf8")).map(
+				(text): readonly [string, string] => ["index.html", text],
+			),
+		];
+
 		const bare: string[] = [];
 		const internal: string[] = [];
-		for (const name of files) {
+		for (const [name, text] of sources) {
 			const file = join(EXAMPLE, name);
-			for (const specifier of importsOf(file)) {
+			for (const specifier of specifiersOf(text)) {
 				if (specifier.startsWith("node:")) continue;
 				if (specifier.startsWith("bun:")) continue;
 				if (!specifier.startsWith(".")) {
@@ -367,13 +634,31 @@ describe("the example's sources", () => {
 					bare.push(`${name}: ${specifier}`);
 					continue;
 				}
-				const resolved = relative(ROOT, resolve(dirname(file), specifier));
+				// The file the specifier names, when the tree has it; the path it
+				// spells out when it does not. Either way, the module is named.
+				const target = resolveSpecifier(file, specifier) ?? resolve(dirname(file), specifier);
+				const resolved = relative(ROOT, target);
 				if (!resolved.startsWith("src/")) continue;
 				if (!PUBLIC_API.has(resolved)) internal.push(`${name}: ${resolved}`);
 			}
 		}
 		expect(bare).toEqual([]);
 		expect(internal).toEqual([]);
+	});
+
+	test("the files the browser reaches ask for nothing the browser cannot load", () => {
+		// `node:` and `bun:` do not resolve in a browser. The toolchain's own
+		// files may use them — the measurement script is run by node — but a file
+		// the browser loads may not, and the difference is the difference between
+		// the toolchain and the realm.
+		const offenders: string[] = [];
+		for (const file of browserFiles()) {
+			for (const specifier of importsOf(file)) {
+				if (!specifier.startsWith("node:") && !specifier.startsWith("bun:")) continue;
+				offenders.push(`${relative(ROOT, file)}: ${specifier}`);
+			}
+		}
+		expect(offenders).toEqual([]);
 	});
 
 	test("the example declares no dependency of its own", () => {
@@ -386,33 +671,35 @@ describe("the example's sources", () => {
 	});
 
 	test("the key is asked for in the page and never written down", () => {
-		const files = readdirSync(EXAMPLE).filter((name) => name.endsWith(".ts"));
-		for (const name of files) {
-			const text = readFileSync(join(EXAMPLE, name), "utf8");
-			// No storage: the key lives in memory, and a key in memory cannot leak
-			// into a file the page leaves behind.
-			expect(text.includes("localStorage")).toBe(false);
-			expect(text.includes("sessionStorage")).toBe(false);
-			expect(text.includes("indexedDB")).toBe(false);
-			expect(text.includes("document.cookie")).toBe(false);
-			// And no key is written into the source either.
-			expect(/sk-[A-Za-z0-9_-]{8,}/.test(text)).toBe(false);
+		// Every file of the example, every extension. A key written into a script
+		// the page never loads is still a key in the example, and a key written
+		// into a file of another kind is no less a key for being harder to see.
+		const offenders: string[] = [];
+		for (const file of everyFileOf(EXAMPLE)) {
+			const text = readFileSync(file, "utf8");
+			for (const pattern of KEY_PATTERNS) {
+				// No storage: the key lives in memory, and a key in memory cannot
+				// leak into a file the page leaves behind. And no key is written
+				// into a source either.
+				if (pattern.test(text)) offenders.push(`${relative(ROOT, file)}: ${pattern.source}`);
+			}
 		}
-		const html = readFileSync(join(EXAMPLE, "index.html"), "utf8");
-		expect(html.includes("localStorage")).toBe(false);
-		expect(html.includes("sessionStorage")).toBe(false);
+		expect(offenders).toEqual([]);
 		// The page asks for it, and the input that asks is a password field.
+		const html = readFileSync(join(EXAMPLE, "index.html"), "utf8");
 		expect(html).toContain('type="password"');
 	});
 
 	test("the page's script and the page agree on every element they name", () => {
 		const html = readFileSync(join(EXAMPLE, "index.html"), "utf8");
-		const entry = readFileSync(join(EXAMPLE, "page.entry.ts"), "utf8");
-		const named = [...entry.matchAll(/byId\("([^"]+)"\)/g)].map((match) => match[1] as string);
-		expect(named.length).toBeGreaterThan(0);
-		for (const id of named) {
-			expect(html).toContain(`id="${id}"`);
+		const have = idsIn(html);
+		const named: string[] = [];
+		for (const file of browserFiles()) {
+			for (const id of idsOf(readFileSync(file, "utf8"))) named.push(id);
 		}
+		expect(named.length).toBeGreaterThan(0);
+		const missing = named.filter((id) => !have.includes(id));
+		expect(missing).toEqual([]);
 	});
 
 	test("the harness is in a worker, and the page is the interface", () => {
@@ -433,15 +720,42 @@ describe("the example's sources", () => {
 		// The page owns the tools. The worker may not import them: a worker that
 		// called the page's functions directly would not be using the bridge, and
 		// the bridge is the whole of the capability boundary.
+		//
+		// The rule is about the module and not about the way it is written down:
+		// `./tools.ts` and `./tools.js` are the same file, and a rule that names
+		// one of them is a rule that the other one walks around.
+		const offenders: string[] = [];
 		for (const name of ["worker.ts", "worker.entry.ts"]) {
-			for (const specifier of importsOf(join(EXAMPLE, name))) {
-				expect(`${name}: ${specifier}`).not.toContain("./tools.ts");
+			const file = join(EXAMPLE, name);
+			for (const specifier of importsOf(file)) {
+				if (!specifier.startsWith(".")) continue;
+				const target = resolveSpecifier(file, specifier);
+				const named = target === undefined ? specifier : relative(ROOT, target);
+				if (named === relative(ROOT, join(EXAMPLE, "tools.ts")) || namesTools(specifier)) {
+					offenders.push(`${name}: ${specifier}`);
+				}
 			}
 		}
+		expect(offenders).toEqual([]);
 	});
 });
 
 describe("the bundle, measured in situ", () => {
+	test("every script the page loads is one of the bundles the ceiling measures", () => {
+		// The ceiling is on what a browser downloads. A script the page loads that
+		// the ceiling does not measure is a script the ceiling knows nothing
+		// about, and a number about something else would be reported as a number
+		// about this.
+		const html = readFileSync(join(EXAMPLE, "index.html"), "utf8");
+		const entry = readFileSync(join(EXAMPLE, "page.entry.ts"), "utf8");
+		const loaded = [...scriptsOf(html), ...workerScriptsOf(entry)];
+		expect(loaded.length).toBeGreaterThan(0);
+		const measured = BUNDLES as readonly string[];
+		for (const src of loaded) {
+			expect(measured).toContain(basename(src));
+		}
+	});
+
 	test("the example bundles under the ceiling", async () => {
 		const out = mkdtempSync(join(tmpdir(), "miha-example-"));
 		try {
@@ -456,9 +770,8 @@ describe("the bundle, measured in situ", () => {
 			expect(`${output}${errors}`).not.toContain("error");
 			expect(code).toBe(0);
 
-			const bundles = ["app.js", "worker.js"];
 			let total = 0;
-			for (const name of bundles) {
+			for (const name of BUNDLES) {
 				const file = join(out, name);
 				expect(existsSync(file)).toBe(true);
 				const size = gzipSync(readFileSync(file), { level: 9 }).byteLength;
@@ -467,6 +780,15 @@ describe("the bundle, measured in situ", () => {
 			// The ceiling is for the whole thing: the page's bundle and the worker's
 			// bundle together are what a browser downloads.
 			expect(total).toBeLessThan(CEILING);
+
+			// And the page loads what the build produced: a document that names a
+			// script the build did not make is a page that fetches nothing.
+			const html = readFileSync(join(EXAMPLE, "index.html"), "utf8");
+			const entry = readFileSync(join(EXAMPLE, "page.entry.ts"), "utf8");
+			for (const src of [...scriptsOf(html), ...workerScriptsOf(entry)]) {
+				const path = src.startsWith("./") ? src.slice(2) : src;
+				expect(existsSync(join(out, path))).toBe(true);
+			}
 		} finally {
 			rmSync(out, { recursive: true, force: true });
 		}
@@ -591,6 +913,21 @@ describe("the harness runs in the example", () => {
 		expect(kinds).toEqual(["message", "message", "tool_call", "tool_result", "message"]);
 		// The sequence numbers are the log's own, and they do not skip.
 		expect(link.journal.map((entry) => entry.seq)).toEqual([1, 2, 3, 4, 5]);
+
+		// The contents are not the whole of it. A journal that was buffered and
+		// flushed at the end has the same contents and is not the same thing: the
+		// last entry has to be at the page before the run says it is over, or the
+		// page is reading a transcript of a run that had already finished.
+		const lastJournal = link.steps.reduce(
+			(last, step, index) => (step.kind === "journal" ? index : last),
+			-1,
+		);
+		const ended = link.steps.findIndex(
+			(step) => step.kind === "event" && step.type === "agent_end",
+		);
+		expect(lastJournal).toBeGreaterThanOrEqual(0);
+		expect(ended).toBeGreaterThanOrEqual(0);
+		expect(lastJournal).toBeLessThan(ended);
 	});
 
 	test("a refusal asks the human, and the run continues", async () => {
@@ -614,6 +951,34 @@ describe("the harness runs in the example", () => {
 		expect(block).toBeDefined();
 		if (block?.kind !== "block") throw new Error("no block entry");
 		expect(block.reason).toBe("the human said no");
+		expect(outcome).toEqual({ kind: "completed" });
+	});
+
+	test("a question the human cannot answer is refused, and the run ends", async () => {
+		const link = wire({
+			provider: twoAgents(),
+			// The question could not be asked: the dialog is broken, the tab is
+			// closing, the person is not there. The run must not wait for an
+			// answer that will never come.
+			askHuman: async () => {
+				throw new Error("the dialog is broken");
+			},
+		});
+
+		link.page.run("say hello", "test-key");
+		const outcome = await settles(link.finished);
+
+		// The question was asked, and it could not be answered.
+		expect(link.asked).toHaveLength(1);
+		expect(link.asked[0]?.tool).toBe("echo");
+		// The call did not run.
+		expect(link.calls).toEqual([]);
+		// And the refusal is in the journal: the model read why the call did not
+		// happen, and the run continued past it.
+		const block = link.journal.find((entry) => entry.kind === "block");
+		expect(block).toBeDefined();
+		if (block?.kind !== "block") throw new Error("no block entry");
+		expect(block.reason).toContain("the question could not be asked");
 		expect(outcome).toEqual({ kind: "completed" });
 	});
 

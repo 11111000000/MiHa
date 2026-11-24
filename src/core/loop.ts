@@ -168,6 +168,7 @@ export function runAgent(
 	const controller = new AbortController();
 	const signal = options.signal ? mergeSignals([options.signal, controller.signal]) : controller.signal;
 	const toolTimeout = resolveToolTimeout(config.toolTimeout);
+	const approvalTimeout = resolveToolTimeout(config.approveTimeout);
 
 	let state: RunState = initialState(config);
 	const intents: Output[] = [];
@@ -279,6 +280,7 @@ export function runAgent(
 					await runPlan(intent.plan, {
 						signal,
 						timeout: toolTimeout,
+						approvalTimeout,
 						approve: host.approve,
 						accept: (result) => {
 							apply({ kind: "tool_result", result });
@@ -320,11 +322,15 @@ export function runAgent(
 		const collapsed = recent.filter((candidate) => candidate.seq < entry.firstKeptSeq);
 		let summary: string;
 		try {
-			summary = await host.summarize(collapsed, entry.summary);
+			summary = await withTimeout(
+				Promise.resolve(host.summarize(collapsed, entry.summary)),
+				toolTimeout,
+				new AbortController(),
+			);
 		} catch {
 			return;
 		}
-		if (summary.length === 0) return;
+		if (typeof summary !== "string" || summary.length === 0) return;
 		apply({
 			kind: "change",
 			targetSeq: entry.seq,
@@ -371,6 +377,8 @@ interface PlanContext {
 	readonly signal: AbortSignal;
 	/** How long a tool may take, in milliseconds. */
 	readonly timeout: number;
+	/** How long the host may take to approve a call, in milliseconds. */
+	readonly approvalTimeout: number;
 	readonly approve: Approve | undefined;
 	readonly accept: (result: ToolResultMessage) => void;
 	readonly block: (call: ToolCallBlock, reason: string) => void;
@@ -406,7 +414,14 @@ async function runOne(entry: ToolCallPlan, context: PlanContext): Promise<void> 
 	if (approve) {
 		let decision: ApproveDecision;
 		try {
-			decision = await approve({ call: entry.call, tool: entry.tool, args: entry.args });
+			// The approval has a deadline of its own: a host that never answers
+			// (a dialog nobody opens) must not hold the run open forever — the same
+			// shape of failure the tool timeout exists to forbid.
+			decision = await withTimeout(
+				Promise.resolve(approve({ call: entry.call, tool: entry.tool, args: entry.args })),
+				context.approvalTimeout,
+				new AbortController(),
+			);
 		} catch (error) {
 			accept(failureResult(entry.call, error));
 			return;

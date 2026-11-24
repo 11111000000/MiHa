@@ -152,4 +152,129 @@ describe("the tool timeout", () => {
 		expect(resolveToolTimeout(Number.POSITIVE_INFINITY)).toBe(Number.POSITIVE_INFINITY);
 		expect(resolveToolTimeout(500)).toBe(500);
 	});
+	test("the approval has a deadline too: a host that never answers does not hold the run open", async () => {
+		const slow: ToolDefinition = {
+			name: "slow",
+			description: "never finishes",
+			parameters: { kind: "object", properties: {} },
+			execute: async () => new Promise(() => {}),
+		};
+		const run = runAgent(
+			config({ tools: toolRegistry([slow]), toolTimeout: 5000, approveTimeout: 40 }),
+			{
+				callProvider: provider(),
+				approve: async () => new Promise(() => {}),
+			},
+			{ message: userMessage("go") },
+		);
+		const { events } = await collect(run);
+
+		const end = events.find((event) => event.type === "agent_end");
+		if (!end || end.type !== "agent_end") throw new Error("no agent_end");
+		const answers = end.messages.filter((message) => message.role === "toolResult");
+		expect(answers).toHaveLength(1);
+		expect(answers[0]?.role === "toolResult" ? answers[0].isError : false).toBe(true);
+	});
+
+	test("the tool is told with the timeout's own reason, on its own signal", async () => {
+		let reason: unknown;
+		const slow: ToolDefinition = {
+			name: "slow",
+			description: "never finishes",
+			parameters: { kind: "object", properties: {} },
+			execute: async (_call, _args, signal) =>
+				new Promise((_resolve, reject) => {
+					signal.addEventListener("abort", () => {
+						reason = signal.reason;
+						reject(new Error("aborted"));
+					});
+				}),
+		};
+		const run = runAgent(
+			config({ tools: toolRegistry([slow]), toolTimeout: 40 }),
+			{ callProvider: provider() },
+			{ message: userMessage("go") },
+		);
+		await collect(run);
+		expect(reason).toBeInstanceOf(Error);
+		expect(String((reason as Error).message)).toContain("did not finish");
+	});
+
+	test("Infinity disables the deadline", async () => {
+		const slow: ToolDefinition = {
+			name: "slow",
+			description: "slow but finite",
+			parameters: { kind: "object", properties: {} },
+			execute: async () => {
+				await new Promise((resolve) => setTimeout(resolve, 120));
+				return { content: [{ type: "text", text: "in time" }] };
+			},
+		};
+		const run = runAgent(
+			config({ tools: toolRegistry([slow]), toolTimeout: Number.POSITIVE_INFINITY }),
+			{ callProvider: provider() },
+			{ message: userMessage("go") },
+		);
+		const { events } = await collect(run);
+		const end = events.find((event) => event.type === "agent_end");
+		if (!end || end.type !== "agent_end") throw new Error("no agent_end");
+		const answers = end.messages.filter((message) => message.role === "toolResult");
+		expect(answers[0]?.role === "toolResult" ? answers[0].isError : true).toBe(false);
+	});
+
+	test("the tool's late answer does not replace the answer that said it did not finish", async () => {
+		let release: (() => void) | undefined;
+		const slow: ToolDefinition = {
+			name: "slow",
+			description: "late",
+			parameters: { kind: "object", properties: {} },
+			execute: async () =>
+				new Promise((resolve) => {
+					release = () => resolve({ content: [{ type: "text", text: "the late answer" }] });
+				}),
+		};
+		const run = runAgent(
+			config({ tools: toolRegistry([slow]), toolTimeout: 40 }),
+			{ callProvider: provider() },
+			{ message: userMessage("go") },
+		);
+		const { events } = await collect(run);
+		release?.();
+		await new Promise((resolve) => setTimeout(resolve, 20));
+
+		const end = events.find((event) => event.type === "agent_end");
+		if (!end || end.type !== "agent_end") throw new Error("no agent_end");
+		const answers = end.messages.filter((message) => message.role === "toolResult");
+		expect(answers).toHaveLength(1);
+		const answer = answers[0];
+		if (!answer || answer.role !== "toolResult") throw new Error("no answer");
+		expect(answer.isError).toBe(true);
+		expect(answer.content[0]).toMatchObject({
+			type: "text",
+			text: expect.stringContaining("did not finish"),
+		});
+	});
+
+	test("a call that finished in time is left alone: its signal is never aborted", async () => {
+		let aborted = false;
+		const quick: ToolDefinition = {
+			name: "slow",
+			description: "quick",
+			parameters: { kind: "object", properties: {} },
+			execute: async (_call, _args, signal) => {
+				signal.addEventListener("abort", () => {
+					aborted = true;
+				});
+				return { content: [{ type: "text", text: "done" }] };
+			},
+		};
+		const run = runAgent(
+			config({ tools: toolRegistry([quick]), toolTimeout: 40 }),
+			{ callProvider: provider() },
+			{ message: userMessage("go") },
+		);
+		await collect(run);
+		await new Promise((resolve) => setTimeout(resolve, 120));
+		expect(aborted).toBe(false);
+	});
 });

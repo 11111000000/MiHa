@@ -129,6 +129,11 @@ export interface HarnessConfig {
 	 */
 	readonly toolTimeout?: number;
 	/**
+	 * How long the host may take to approve a call, in milliseconds. The default is
+	 * 120 000 — a human is slower than a file read, and the host may say otherwise.
+	 */
+	readonly approveTimeout?: number;
+	/**
 	 * How many bytes of text the model's context may hold. The core collapses what
 	 * does not fit (ADR 0010 D54); the default is 128 KiB — twice the size of a
 	 * median task.
@@ -890,11 +895,12 @@ function replaceAnswer(
 	results: readonly ToolResultMessage[],
 	result: ToolResultMessage,
 ): readonly ToolResultMessage[] {
+	// The **first** answer for a call wins: a call is answered once (law M1), and a
+	// tool that answers after its deadline does not get to replace the answer that
+	// already said it did not finish in time.
 	const index = results.findIndex((candidate) => candidate.toolCallId === result.toolCallId);
-	if (index === -1) return [...results, result];
-	const next = [...results];
-	next[index] = result;
-	return next;
+	if (index !== -1) return results;
+	return [...results, result];
 }
 
 /**

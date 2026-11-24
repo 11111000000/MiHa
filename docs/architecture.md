@@ -250,12 +250,14 @@ the context, one result — are all bounded by a number.
 | `worker/` | the capability bridge, the realm host | 181 | ~250 |
 | `trace/` | the cassette — the provider responses only | 158 | ~180 |
 | `ui/` | the registry, the flat spec, the patches, the tree | 407 | ~800 |
+
 | | | **1 909** | **≈3 350** |
 
 **Bundle: 8 102 B gzip for the core, 9 708 B with the provider layer** (measured by
-`scripts/check-budget.mjs`), and **14 458 B** for the whole browser example in
-`examples/browser/` — the page, the worker and the harness together. The ceiling is
-30 000 B. Zero runtime dependencies.
+`scripts/check-budget.mjs`), and **14 836 B** for the whole browser example in
+`examples/browser/` — the page, the worker and the harness together, measured in situ
+([ADR 0018](./adr/0018-fieldwork.md) D102). The ceiling is 30 000 B. Zero runtime
+dependencies.
 Resident memory O(window + context + one result), by law.
 
 ---

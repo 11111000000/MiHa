@@ -151,4 +151,64 @@ describe("the host's digest", () => {
 		await collect(run);
 		expect(entries.filter((entry) => entry.kind === "change")).toHaveLength(0);
 	});
+	test("the summarizer is asked about the collapsed range, and gets the digest", async () => {
+		const asked: { collapsed: number[]; mechanical: string }[] = [];
+		const entries: JournalEntry[] = [];
+		const run = runAgent(
+			config({ tools: toolRegistry([echo]), contextBudget: 100 }),
+			{
+				callProvider: provider(),
+				append: (entry) => entries.push(entry),
+				summarize: async (collapsed, mechanical) => {
+					asked.push({ collapsed: collapsed.map((entry) => entry.seq), mechanical });
+					return "the host's own words";
+				},
+			},
+			{ message: userMessage("go") },
+		);
+		await collect(run);
+
+		expect(asked.length).toBeGreaterThan(0);
+		const first = asked[0];
+		expect(first).toBeDefined();
+		expect(first?.mechanical).toContain("entries collapsed");
+		// Everything handed over is what was collapsed, and the range starts at the
+		// beginning of the log.
+		expect(first?.collapsed[0]).toBe(1);
+		for (const seq of first?.collapsed ?? []) expect(seq).toBeLessThan(100);
+	});
+
+	test("a summarizer that answers nonsense leaves the digest exactly as it was", async () => {
+		const entries: JournalEntry[] = [];
+		const run = runAgent(
+			config({ tools: toolRegistry([echo]), contextBudget: 100 }),
+			{
+				callProvider: provider(),
+				append: (entry) => entries.push(entry),
+				summarize: (async () => undefined) as unknown as () => string,
+			},
+			{ message: userMessage("go") },
+		);
+		const { outcome } = await collect(run);
+
+		expect(outcome).toEqual({ kind: "completed" });
+		expect(entries.filter((entry) => entry.kind === "change")).toHaveLength(0);
+	});
+
+	test("a summarizer that never answers does not hold the run open", async () => {
+		const entries: JournalEntry[] = [];
+		const run = runAgent(
+			config({ tools: toolRegistry([echo]), contextBudget: 100, toolTimeout: 40 }),
+			{
+				callProvider: provider(),
+				append: (entry) => entries.push(entry),
+				summarize: async () => new Promise<string>(() => {}),
+			},
+			{ message: userMessage("go") },
+		);
+		const { outcome } = await collect(run);
+
+		expect(outcome).toEqual({ kind: "completed" });
+		expect(entries.filter((entry) => entry.kind === "change")).toHaveLength(0);
+	});
 });

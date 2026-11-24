@@ -356,3 +356,75 @@ function host(): HarnessHost {
 		},
 	};
 }
+
+describe("the port's own edges", () => {
+	test("a frame that cannot be encoded is reported, not thrown", () => {
+		const failures: unknown[] = [];
+		const port = createWebSocketPort({
+			send: () => {},
+			close: () => {},
+			readyState: 1,
+		});
+		port.onFailure?.((failure) => failures.push(failure));
+		const cyclic: Record<string, unknown> = {};
+		cyclic["self"] = cyclic;
+
+		expect(() => port.post(cyclic)).not.toThrow();
+		expect(failures).toHaveLength(1);
+	});
+
+	test("a message that is not JSON is handed over as it is, not thrown", () => {
+		const received: unknown[] = [];
+		const port = createWebSocketPort({
+			send: () => {},
+			close: () => {},
+			readyState: 1,
+		});
+		port.onMessage((message) => received.push(message));
+
+		expect(() => port.receive("not json at all")).not.toThrow();
+		expect(received).toHaveLength(1);
+		expect(received[0]).toBe("not json at all");
+	});
+
+	test("a failure handler that throws does not make the port throw", () => {
+		const port = createWebSocketPort({
+			send: () => {},
+			close: () => {},
+			readyState: 1,
+		});
+		port.onFailure?.(() => {
+			throw new Error("the handler is broken");
+		});
+		expect(() => port.post({ kind: "accept", taskId: "t1" })).not.toThrow();
+	});
+
+	test("a listener that throws does not stop the delivery to the others", () => {
+		const received: unknown[] = [];
+		const port = createWebSocketPort({
+			send: () => {},
+			close: () => {},
+			readyState: 1,
+		});
+		port.onMessage(() => {
+			throw new Error("this listener is broken");
+		});
+		port.onMessage((message) => received.push(message));
+
+		expect(() => port.receive('{"kind":"accept","taskId":"t1"}')).not.toThrow();
+		expect(received).toHaveLength(1);
+	});
+
+	test("closing the port closes the socket under it", () => {
+		let closed = false;
+		const port = createWebSocketPort({
+			send: () => {},
+			close: () => {
+				closed = true;
+			},
+			readyState: 1,
+		});
+		port.close();
+		expect(closed).toBe(true);
+	});
+});
