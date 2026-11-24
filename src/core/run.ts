@@ -5,9 +5,9 @@
  * plus a list of **intents**. It never calls a provider, never runs a tool and never
  * writes to storage (ADR 0005 D24, ADR 0006 D31).
  *
- * Six states. The phase is data, not control flow, so a run can be inspected,
- * serialised or resumed — and cancellation is total: every live state can reach
- * `finished`.
+ * Six states. The phase is **derived**, never stored: `phase = f(journal tail,
+ * ephemeral)` (ADR 0008 D48). So a run can be inspected, serialised or resumed — and
+ * cancellation is total: every live state can reach `finished`.
  *
  * The laws this machine maintains:
  *
@@ -189,7 +189,7 @@ function write(
 	const kept = Math.max(0, state.entries.length + 1 - state.journalWindow);
 	const entries = [...state.entries, entry].slice(kept);
 	outputs.push({ kind: "append", entry });
-	return { entry, state: { ...state, entries, context, nextId: seq + 1 } };
+	return { entry, state: evolve(state, { entries, context, nextId: seq + 1 }) };
 }
 
 /**
@@ -230,6 +230,14 @@ interface Accumulator {
 }
 
 export interface RunState {
+	/**
+	 * The phase, as the state says it.
+	 *
+	 * It is not a field: the property is an accessor, and every read recomputes the
+	 * label from the state it is read from (ADR 0008 D48). A stored phase is a phase
+	 * that can disagree with the state it belongs to, and a phase that disagrees is a
+	 * machine that lies about itself.
+	 */
 	readonly phase: Phase;
 	readonly config: HarnessConfig;
 	/** The resolved turn limit: the config's, or the default (ADR 0009 D51). */
@@ -250,6 +258,14 @@ export interface RunState {
 	readonly contextBudget: number;
 	/** How many provider requests have been made. */
 	readonly turn: number;
+	/**
+	 * How many of those requests the provider has answered.
+	 *
+	 * The log says the same: one assistant message per answer. The run keeps the
+	 * count because the log is windowed — and because the difference between the two
+	 * counts is what says the run is waiting for the provider.
+	 */
+	readonly answered: number;
 	/** The next id the core will hand out. Deterministic, so a run replays. */
 	readonly nextId: number;
 	readonly accumulator: Accumulator | undefined;
@@ -263,8 +279,7 @@ export interface RunState {
 }
 
 export function initialState(config: HarnessConfig): RunState {
-	return {
-		phase: "idle",
+	return withPhase({
 		config,
 		turnLimit: resolveTurnLimit(config.turnLimit),
 		resultBudget: resolveBudget(config.resultBudget),
@@ -275,13 +290,84 @@ export function initialState(config: HarnessConfig): RunState {
 		journalWindow: resolveJournalWindow(config.journalWindow),
 		contextBudget: resolveContextBudget(config.contextBudget),
 		turn: 0,
+		answered: 0,
 		nextId: 1,
 		accumulator: undefined,
 		calls: [],
 		results: [],
 		queued: [],
 		outcome: undefined,
-	};
+	});
+}
+
+/** The state without its phase: the phase is derived and installed on top. */
+type Fields = Omit<RunState, "phase">;
+
+/**
+ * The state, with its phase.
+ *
+ * The phase is installed as an accessor and never as a value: every read recomputes
+ * it from the state it is read from, so it cannot disagree with the state. The
+ * accessor is not enumerable, so a copy of the state does not carry it — a copy that
+ * forgot it would have a stale phase, which is why `evolve` is the only way to make
+ * a state.
+ */
+function withPhase(fields: Fields): RunState {
+	const state = { ...fields } as RunState;
+	Object.defineProperty(state, "phase", {
+		configurable: true,
+		enumerable: false,
+		get: () => phaseOf(state),
+	});
+	return state;
+}
+
+/**
+ * The next state.
+ *
+ * The same run with some of its fields changed. The phase is not among them: it is
+ * derived, so it is computed again from what the new state holds.
+ */
+function evolve(state: RunState, patch: Omit<Partial<RunState>, "phase">): RunState {
+	return withPhase(Object.assign({ ...state }, patch));
+}
+
+/**
+ * The phase, as the state says it.
+ *
+ * The phase is not a field of the state: it is a label of what the state holds, and
+ * it is computed every time it is read (ADR 0008 D48). Six labels, and each one
+ * answers a question:
+ *
+ *   `idle`        nothing has happened yet
+ *   `requesting`  the run asked the provider and waits for the answer
+ *   `streaming`   the provider is answering: the assistant message is being written
+ *   `dispatching` a batch of calls is in flight: the calls wait for their answers
+ *   `settling`    the answers are in the log and the turn is closing
+ *   `finished`    the run ended: the outcome is set
+ *
+ * The derivation reads the log's tail and the run's ephemeral state:
+ *
+ * - the outcome is set — the run is over (`finished`);
+ * - the log is empty — the run has not started (`idle`);
+ * - the provider is answering — the assistant message is being written (`streaming`);
+ * - a batch is in flight — the calls of the turn wait for their answers
+ *   (`dispatching`);
+ * - the run asked for a turn the provider has not answered yet (`requesting`);
+ * - otherwise the turn is closing: the answers are in the log and nothing waits
+ *   (`settling`).
+ *
+ * The log cannot say the last of these on its own: a turn boundary leaves no trace
+ * in it, so the run keeps the count of the turns it has been answered for, and the
+ * phase compares it with the count of the turns it has asked for.
+ */
+export function phaseOf(state: RunState): Phase {
+	if (state.outcome !== undefined) return "finished";
+	if (state.entries.length === 0) return "idle";
+	if (state.accumulator !== undefined) return "streaming";
+	if (state.calls.length > state.written.length) return "dispatching";
+	if (state.turn > state.answered) return "requesting";
+	return "settling";
 }
 
 /**
@@ -294,7 +380,9 @@ export function initialState(config: HarnessConfig): RunState {
 export function step(state: RunState, input: Input): Step {
 	switch (input.kind) {
 		case "prompt":
-			return state.phase === "idle" ? startRun(state, input.message) : queueMessage(state, input.message);
+			return phaseOf(state) === "idle"
+				? startRun(state, input.message)
+				: queueMessage(state, input.message);
 		case "steer":
 			return queueMessage(state, input.message);
 		case "provider":
@@ -319,12 +407,13 @@ function startRun(state: RunState, message: AgentMessage): Step {
 	const { entry, state: written } = write(state, promptBody(message), outputs);
 	announce(outputs, `m${entry.seq}`, message);
 
-	const next: RunState = { ...written, phase: "requesting", turn: 1 };
+	// The first turn: the run asks the provider, so the phase is `requesting`.
+	const next: RunState = evolve(written, { turn: 1 });
 	return beginTurn(next, outputs);
 }
 
 function queueMessage(state: RunState, message: AgentMessage): Step {
-	return { state: { ...state, queued: [...state.queued, message] }, outputs: [] };
+	return { state: evolve(state, { queued: [...state.queued, message] }), outputs: [] };
 }
 
 /** Starts a provider turn: emits `turn_start` and asks the host to call the provider. */
@@ -342,29 +431,27 @@ function beginTurn(state: RunState, outputs: Output[]): Step {
 	};
 	outputs.push({ kind: "event", event: { type: "turn_start" } });
 	outputs.push({ kind: "provider_request", request });
-	return { state: { ...state, phase: "requesting" }, outputs };
+	return { state, outputs };
 }
 
 function applyProvider(state: RunState, event: ProviderEvent): Step {
-	if (state.phase === "finished") return { state, outputs: [] };
+	if (phaseOf(state) === "finished") return { state, outputs: [] };
 
 	let current = state;
 	const outputs: Output[] = [];
 
-	if (current.phase === "requesting") {
+	if (phaseOf(current) === "requesting") {
 		// The message's id is the number its journal entry will carry: the id is
 		// taken now, the entry is written when the message ends, and nothing is
 		// written in between — so the sequence has no holes.
 		const id = `m${current.nextId}`;
-		current = {
-			...current,
-			phase: "streaming",
+		current = evolve(current, {
 			accumulator: { id, blocks: [], calls: [], usage: emptyUsage },
-		};
+		});
 		outputs.push({ kind: "event", event: { type: "message_start", id, role: "assistant" } });
 	}
 
-	if (current.phase !== "streaming" || !current.accumulator) {
+	if (phaseOf(current) !== "streaming" || !current.accumulator) {
 		return { state: current, outputs };
 	}
 
@@ -472,7 +559,7 @@ function emitUpdate(
 			providerEvent,
 		},
 	});
-	return { state: { ...state, accumulator }, outputs };
+	return { state: evolve(state, { accumulator }), outputs };
 }
 
 /**
@@ -517,14 +604,16 @@ function finaliseAssistant(
 
 	// The calls are entries of their own: the model's request and the tool's answer
 	// are two facts, and the log holds both.
-	let base: RunState = {
-		...withMessage,
+	// The provider has answered this turn: the count of the answered turns catches
+	// up with the count of the requests, and the phase says so.
+	let base: RunState = evolve(withMessage, {
 		accumulator: undefined,
 		calls: accumulator.calls,
 		results: [],
 		written: [],
 		blocks: [],
-	};
+		answered: withMessage.answered + 1,
+	});
 	for (const call of accumulator.calls) {
 		const written = write(
 			base,
@@ -555,12 +644,12 @@ function finaliseAssistant(
 			// Every call was rejected, so the batch is already answered and the driver
 			// has nothing to execute. Closing it here is what keeps the pairing whole.
 			const rejections = plan.rejections.map((result) => budgeted(base, result));
-			const flushed = flushResults({ ...base, phase: "dispatching", results: rejections }, outputs);
+			const flushed = flushResults(evolve(base, { results: rejections }), outputs);
 			return endTurn(flushed, outputs, true);
 		}
 
 		const rejections = plan.rejections.map((result) => budgeted(base, result));
-		return { state: { ...base, phase: "dispatching", results: rejections }, outputs };
+		return { state: evolve(base, { results: rejections }), outputs };
 	}
 
 	if (accumulator.calls.length > 0) {
@@ -570,11 +659,11 @@ function finaliseAssistant(
 		// and M4).
 		const reason = undispatchedReason(stopReason, errorMessage);
 		const results = accumulator.calls.map((call) => budgeted(base, syntheticResult(call, reason)));
-		const flushed = flushResults({ ...base, phase: "dispatching", results }, outputs);
+		const flushed = flushResults(evolve(base, { results }), outputs);
 		return endTurn(flushed, outputs, false);
 	}
 
-	return endTurn({ ...base, phase: "settling" }, outputs, false);
+	return endTurn(base, outputs, false);
 }
 
 /** Why a call was streamed and never dispatched. */
@@ -605,7 +694,7 @@ function budgeted(state: RunState, result: ToolResultMessage): ToolResultMessage
 
 /** A tool reported partial progress. */
 function applyToolProgress(state: RunState, toolCallId: string, partial: ToolResult): Step {
-	if (state.phase !== "dispatching") return { state, outputs: [] };
+	if (phaseOf(state) !== "dispatching") return { state, outputs: [] };
 	const call = state.calls.find((candidate) => candidate.id === toolCallId);
 	if (!call) return { state, outputs: [] };
 	return {
@@ -646,7 +735,7 @@ function flushResults(state: RunState, outputs: Output[]): RunState {
 	}
 
 	const writtenIds = [...state.written, ...state.calls.map((call) => call.id)];
-	return { ...written, phase: "settling", results: state.results, written: writtenIds };
+	return evolve(written, { results: state.results, written: writtenIds });
 }
 
 /**
@@ -689,7 +778,7 @@ function writeAnswer(
  * completion order.
  */
 function applyToolResult(state: RunState, incoming: ToolResultMessage): Step {
-	if (state.phase !== "dispatching") return { state, outputs: [] };
+	if (phaseOf(state) !== "dispatching") return { state, outputs: [] };
 	// An answer for a call this batch never made is not an answer to it: counting it
 	// would make the batch look finished while a call of ours waits (law M1).
 	if (!state.calls.some((call) => call.id === incoming.toolCallId)) return { state, outputs: [] };
@@ -710,10 +799,10 @@ function applyToolResult(state: RunState, incoming: ToolResultMessage): Step {
 	];
 
 	if (results.length < state.calls.length) {
-		return { state: { ...state, results }, outputs };
+		return { state: evolve(state, { results }), outputs };
 	}
 
-	const flushed = flushResults({ ...state, results }, outputs);
+	const flushed = flushResults(evolve(state, { results }), outputs);
 	return endTurn(flushed, outputs, true);
 }
 
@@ -724,7 +813,7 @@ function applyToolResult(state: RunState, incoming: ToolResultMessage): Step {
  * holds it as a `block` entry — the audit trail and the model's view are one fact.
  */
 function applyBlocked(state: RunState, call: ToolCallBlock, reason: string): Step {
-	if (state.phase !== "dispatching") return { state, outputs: [] };
+	if (phaseOf(state) !== "dispatching") return { state, outputs: [] };
 
 	const message = budgeted(state, toolResultMessage(call.id, call.name, [{ type: "text", text: reason }], true));
 	const outputs: Output[] = [
@@ -746,10 +835,10 @@ function applyBlocked(state: RunState, call: ToolCallBlock, reason: string): Ste
 	const results = replaceAnswer(state.results, message);
 
 	if (results.length < state.calls.length) {
-		return { state: { ...state, blocks, results }, outputs };
+		return { state: evolve(state, { blocks, results }), outputs };
 	}
 
-	const flushed = flushResults({ ...state, blocks, results }, outputs);
+	const flushed = flushResults(evolve(state, { blocks, results }), outputs);
 	return endTurn(flushed, outputs, true);
 }
 
@@ -932,20 +1021,20 @@ function endTurn(state: RunState, outputs: Output[], hadToolCalls: boolean): Ste
 		const rest = state.queued.slice(1);
 		const { entry, state: written } = write(state, promptBody(next), outputs);
 		announce(outputs, `m${entry.seq}`, next);
-		const prepared: RunState = {
-			...written,
-			phase: "requesting",
+		const prepared: RunState = evolve(written, {
 			queued: rest,
 			results: [],
 			turn: state.turn + 1,
-		};
+		});
 		// The context is bounded after everything this turn put into it: the queued
 		// message is part of the context now, and the request must fit.
 		return beginTurn(compactIfNeeded(prepared, outputs), outputs);
 	}
 
 	if (hadToolCalls) {
-		const prepared: RunState = { ...state, phase: "requesting", results: [], turn: state.turn + 1 };
+		// Another turn follows: the run asks the provider again, and the phase says
+		// `requesting` until the provider answers.
+		const prepared: RunState = evolve(state, { results: [], turn: state.turn + 1 });
 		return beginTurn(compactIfNeeded(prepared, outputs), outputs);
 	}
 
@@ -955,7 +1044,8 @@ function endTurn(state: RunState, outputs: Output[], hadToolCalls: boolean): Ste
 function finish(state: RunState, outcome: Outcome, outputs: Output[]): Step {
 	const messages = contextMessages(state.context);
 	outputs.push({ kind: "event", event: { type: "agent_end", messages, outcome } });
-	return { state: { ...state, phase: "finished", outcome }, outputs };
+	// The outcome is set, so the phase is `finished` — derived, not written.
+	return { state: evolve(state, { outcome }), outputs };
 }
 
 /**
@@ -965,7 +1055,7 @@ function finish(state: RunState, outcome: Outcome, outputs: Output[]): Step {
  * answer (law M1), because a transcript with an unanswered call cannot be replayed.
  */
 function cancelRun(state: RunState): Step {
-	if (state.phase === "finished") return { state, outputs: [] };
+	if (phaseOf(state) === "finished") return { state, outputs: [] };
 
 	const outputs: Output[] = [];
 	let written = state;
@@ -981,8 +1071,8 @@ function cancelRun(state: RunState): Step {
 		written = writeAnswer(written, call, result, state.blocks, outputs);
 	}
 
-	const finished: RunState = { ...written, phase: "finished" };
-	return finish(finished, { kind: "cancelled" }, outputs);
+	// The outcome is set, so the phase is `finished` — derived, not written.
+	return finish(written, { kind: "cancelled" }, outputs);
 }
 
 /** Exported for the driver: the outcome of a finished run. */

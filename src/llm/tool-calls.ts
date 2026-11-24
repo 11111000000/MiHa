@@ -88,4 +88,21 @@ export class ToolCallTracker {
 		}
 		return calls;
 	}
+
+	/**
+	 * The indexes of the calls that never identified themselves.
+	 *
+	 * A call is identified by its id and its name: the id is what the answer
+	 * must reference, and the name is what says which tool runs. A call that
+	 * never says both cannot be performed — and it cannot be dropped either,
+	 * because the model is waiting for an answer to it. So the caller reports
+	 * it.
+	 */
+	get unidentified(): readonly number[] {
+		const indexes: number[] = [];
+		for (const entry of this.#byIndex.values()) {
+			if (entry.id === undefined || entry.name === undefined) indexes.push(entry.index);
+		}
+		return indexes;
+	}
 }

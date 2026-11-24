@@ -254,7 +254,7 @@
       ],
       "falsifier": "A call is left unanswered on any path, a call with unparseable arguments reaches a group, a failure becomes ordinary content or a thrown error, or the results are recorded in completion order",
       "register": "fact",
-      "control": "sed -i 's/const flushed = flushResults({ ...state, results }, outputs);/const flushed = { ...state, phase: \"settling\" as const, results: [] };/' src/core/run.ts",
+      "control": "sed -i 's/const flushed = flushResults(evolve(state, { results }), outputs);/const flushed = { ...state, phase: \"settling\" as const, results: [] };/' src/core/run.ts",
       "waiver": null
     },
     {
@@ -725,7 +725,7 @@
       ],
       "falsifier": "a task accepted without the peer being told, a refusal without a reason, a foreign version accepted, the run's entries not reaching the peer, an outcome that is not the run's own, a cancelled run that keeps working, or a peer left able to call the receiving side's tools",
       "register": "fact",
-      "control": "sed -i 's/send({ kind: \"accept\", taskId });/;/' src/exchange/receive.ts",
+      "control": "sed -i 's/if (!send({ kind: \"accept\", taskId })) return;/if (!send({ kind: \"refuse\", taskId, reason: \"no\" })) return;/' src/exchange/receive.ts",
       "waiver": null
     },
     {
@@ -766,13 +766,14 @@
         "src/llm/",
         "test/llm-minimax.test.ts",
         "test/fixtures/",
-        "scripts/minimax-smoke.sh"
+        "scripts/minimax-smoke.sh",
+        "test/llm.test.ts"
       ],
       "owner": "petr p.b.kosov@yandex.ru",
       "requirements": [
         {
           "kind": "verifier",
-          "spec": "bun test test/llm-minimax.test.ts"
+          "spec": "bun test test/llm-minimax.test.ts test/llm.test.ts"
         }
       ],
       "falsifier": "the fixture's thinking not reaching the core as a reasoning delta, a tool call not correlating, the usage not arriving, or the adapter raising",
@@ -798,6 +799,99 @@
       "register": "fact",
       "control": "sed -i 's/request = await host.prepareRequest(request, signal);/await host.prepareRequest(request, signal);/' src/core/loop.ts",
       "waiver": null
+    },
+    {
+      "id": "phase-derived",
+      "text": "The run's phase is a function of the journal's tail and the run's ephemeral state, never a field that can disagree with them: the same journal and the same ephemeral state always name the same phase, and the phase is what the driver reads to know whether the run is over.",
+      "scope": [
+        "src/core/run.ts",
+        "src/core/loop.ts",
+        "test/phase-derived.test.ts"
+      ],
+      "owner": "petr p.b.kosov@yandex.ru",
+      "requirements": [
+        {
+          "kind": "verifier",
+          "spec": "bun test test/phase-derived.test.ts"
+        }
+      ],
+      "falsifier": "two states with the same journal tail and the same ephemeral state naming different phases, a phase that disagrees with the journal, or the driver's notion of 'the run is over' differing from the derived phase",
+      "register": "fact",
+      "control": "sed -i 's/if (state.turn > state.answered) return \"requesting\";/if (state.turn >= state.answered) return \"requesting\";/' src/core/run.ts",
+      "waiver": null
+    },
+    {
+      "id": "exchange-decisions",
+      "text": "The receiving side's decisions are taken and visible: a refusal may carry a declaration of what this side can do and the peer sees it; a transport that throws ends the task as a failure instead of leaving the peer waiting; our own tools stay transparent to the approve seam (the same name, the same dialect, the same behaviour); and the host's journal hook and the peer's event frames cannot lose an entry between them.",
+      "scope": [
+        "src/exchange/",
+        "test/exchange-receive.test.ts",
+        "test/exchange.test.ts"
+      ],
+      "owner": "petr p.b.kosov@yandex.ru",
+      "requirements": [
+        {
+          "kind": "verifier",
+          "spec": "bun test test/exchange-receive.test.ts"
+        }
+      ],
+      "falsifier": "a declaration dropped on the way to the peer, a throwing transport leaving the outcome unsettled, the approve seam seeing a different tool than the host's own, or an entry written to the journal that the peer never hears",
+      "register": "fact",
+      "control": "sed -i 's/if (!send({ kind: \"accept\", taskId })) return;/if (!send({ kind: \"refuse\", taskId, reason: \"no\" })) return;/' src/exchange/receive.ts",
+      "waiver": null
+    },
+    {
+      "id": "ui-spec-laws",
+      "text": "The interface layer turns a flat spec into a tree without running anything: a spec that names a component the registry does not have, or a property the component does not declare, is refused before the tree is built; the tree is plain data; and the same spec always produces the same tree.",
+      "scope": [
+        "src/ui/",
+        "test/ui.test.ts"
+      ],
+      "owner": "petr p.b.kosov@yandex.ru",
+      "requirements": [
+        {
+          "kind": "verifier",
+          "spec": "bun test test/ui.test.ts"
+        }
+      ],
+      "falsifier": "a spec naming an unknown component accepted, a spec with an unknown property accepted, the tree carrying a function or a script, or the same spec producing two different trees",
+      "register": "fact",
+      "control": "sed -i 's/if (!definition.properties.includes(key)) {/if (false) {/' src/ui/tree.ts",
+      "waiver": null,
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0016-interface-layer.md",
+        "section": null,
+        "digest": "df7aa4e7ee1151960477a06a7476525880f0046e0ab6966bc7410331f76d4fc9",
+        "review": null
+      }
+    },
+    {
+      "id": "ui-registry-laws",
+      "text": "The registry is a closed set: a component name the registry does not have is refused, a property the component does not declare is refused, a value that is not data is refused, a patch substitutes the host's own component exactly once, and a patch may not reach outside the registry.",
+      "scope": [
+        "src/ui/registry.ts",
+        "src/ui/tree.ts",
+        "test/ui-registry.test.ts"
+      ],
+      "owner": "petr p.b.kosov@yandex.ru",
+      "requirements": [
+        {
+          "kind": "verifier",
+          "spec": "bun test test/ui-registry.test.ts"
+        }
+      ],
+      "falsifier": "a name of Object.prototype resolving to a component, a spec with an unknown property accepted, a property carrying a function or a class instance, a patch applied twice, or a patch substituting a component the registry does not have",
+      "register": "fact",
+      "control": "sed -i 's/return registry.definitions.get(name);/return (registry.definitions as unknown as Record<string, ComponentDefinition>)[name] as ComponentDefinition | undefined;/' src/ui/registry.ts",
+      "waiver": null,
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0016-interface-layer.md",
+        "section": null,
+        "digest": "df7aa4e7ee1151960477a06a7476525880f0046e0ab6966bc7410331f76d4fc9",
+        "review": null
+      }
     }
   ]
 }

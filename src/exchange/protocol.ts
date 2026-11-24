@@ -42,6 +42,47 @@ export interface RefuseFrame {
 	readonly kind: "refuse";
 	readonly taskId: string;
 	readonly reason: string;
+	/**
+	 * What this side declared it can do — "data, not compute".
+	 *
+	 * A refusal says what this side will not do; the declaration says what it will.
+	 * The peer may show it to its own user, so it travels with the refusal rather
+	 * than being asked for again (ADR 0011 D78).
+	 */
+	readonly declaration?: string;
+}
+
+/**
+ * A refusal, as the peer told it.
+ *
+ * The peer said two things: why it will not take the task, and — optionally — what it
+ * declared it can do. A delegation turns the refusal into a failure, and the failure
+ * carries the refusal: a failure that dropped the declaration would drop what the
+ * peer knows about itself (ADR 0011 D78).
+ */
+export interface Refusal {
+	/** Why the task was not taken. */
+	readonly reason: string;
+	/** What this side declared it can do. Absent when it declared nothing. */
+	readonly declaration?: string;
+}
+
+/**
+ * Whether a failure carries a refusal, and what the peer said.
+ *
+ * A failure's error is `unknown` — the outcome says a run failed, not how — so a
+ * host reads a refusal through this guard rather than by guessing at the shape.
+ */
+export function refusalOf(error: unknown): Refusal | undefined {
+	if (typeof error !== "object" || error === null) return undefined;
+	if (!("reason" in error)) return undefined;
+	const reason = (error as { readonly reason: unknown }).reason;
+	if (typeof reason !== "string") return undefined;
+	const declaration = (error as { readonly declaration?: unknown }).declaration;
+	return {
+		reason,
+		...(typeof declaration === "string" ? { declaration } : {}),
+	};
 }
 
 export interface EventFrame {

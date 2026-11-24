@@ -94,6 +94,61 @@ function latch(): { readonly open: Promise<void>; readonly release: () => void }
 	return { open, release };
 }
 
+/**
+ * Whether a promise settles within the window.
+ *
+ * Some of what the driver does happens after the run's last event, so the
+ * test has to wait for it — and a promise that never settles must not hang
+ * the test.
+ */
+async function within(promise: Promise<unknown>, ms: number): Promise<boolean> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timeout = new Promise<boolean>((resolve) => {
+		timer = setTimeout(() => resolve(false), ms);
+	});
+	try {
+		return await Promise.race([promise.then(() => true), timeout]);
+	} finally {
+		if (timer !== undefined) clearTimeout(timer);
+	}
+}
+
+/**
+ * A signal the test can watch.
+ *
+ * A real `AbortSignal` drops a `once` listener by itself when it fires, which
+ * hides what the driver does with the host's signal. The spy counts the
+ * removals the driver asks for, so the test sees whether the driver let go of
+ * the host's signal when the run ended.
+ */
+function spySignal(): {
+	readonly signal: AbortSignal;
+	readonly abort: () => void;
+	readonly released: Promise<void>;
+} {
+	const controller = new AbortController();
+	const real = controller.signal;
+	let released: () => void = () => {};
+	const gone = new Promise<void>((resolve) => {
+		released = resolve;
+	});
+	const spy = {
+		get aborted(): boolean {
+			return real.aborted;
+		},
+		get reason(): unknown {
+			return real.reason;
+		},
+		addEventListener: (_type: string, listener: () => void, _options?: unknown): void => {
+			real.addEventListener("abort", () => listener());
+		},
+		removeEventListener: (_type: string, _listener: () => void, _options?: unknown): void => {
+			released();
+		},
+	} as unknown as AbortSignal;
+	return { signal: spy, abort: () => controller.abort(), released: gone };
+}
+
 describe("the request seam", () => {
 	test("the provider receives exactly what the seam returned", async () => {
 		const returned: ProviderRequest = {
@@ -325,5 +380,186 @@ describe("the request seam", () => {
 		// And the host's own objects, not copies of them.
 		expect(seen?.tools[0]).toBe(readFile);
 		expect(seen?.options).toBe(options);
+	});
+
+	test("the rewrite is applied to every request, not only to the first", async () => {
+		const script: readonly (readonly ProviderEvent[])[] = [
+			[
+				{ type: "tool_call_start", id: "c1", name: "read_file" },
+				{ type: "tool_arguments_delta", id: "c1", delta: '{"path":"a.txt"}' },
+				done("toolUse"),
+			],
+			[{ type: "text_delta", delta: "done" }, done("stop")],
+		];
+		const models: string[] = [];
+		const rewrites: string[] = [];
+		let turn = 0;
+		const run = runAgent(
+			config(),
+			{
+				callProvider: async function* (request) {
+					models.push(request.model);
+					const events = script[turn] ?? [];
+					turn += 1;
+					for (const event of events) yield event;
+				},
+				prepareRequest: (request) => {
+					rewrites.push(request.model);
+					return { ...request, model: `rewritten-${rewrites.length}` };
+				},
+			},
+			{ message: userMessage("read a.txt") },
+		);
+
+		const { outcome } = await collect(run);
+
+		expect(outcome).toEqual({ kind: "completed" });
+		// The seam was asked about both requests, and both of them went to the
+		// provider rewritten. A rewrite that reached only the first turn would
+		// leave the second one as the core built it.
+		expect(rewrites).toEqual(["test-model", "test-model"]);
+		expect(models).toEqual(["rewritten-1", "rewritten-2"]);
+	});
+
+	test("the seam sees the options bag the core built", async () => {
+		// The bag is how a host reaches a provider knob — MiniMax's
+		// `reasoning_split` rides in it — so the seam has to see it.
+		const options = { reasoning_split: true, temperature: 0.2 };
+		const cfg: HarnessConfig = { ...config(), options };
+		let seen: ProviderRequest | undefined;
+		const run = runAgent(
+			cfg,
+			{
+				callProvider: async function* () {
+					yield done("stop");
+				},
+				prepareRequest: (request) => {
+					seen = request;
+					return request;
+				},
+			},
+			{ message: userMessage("hello") },
+		);
+
+		await collect(run);
+
+		expect(seen?.options).toEqual(options);
+	});
+
+	test("the seam is given a live signal, and the run's end aborts it", async () => {
+		// A run without an external signal still hands the seam a signal of its
+		// own: the run's merged one. It is alive while the run lasts, and the
+		// end of the run aborts it.
+		let seen: AbortSignal | undefined;
+		let abortedWhenAsked: boolean | undefined;
+		const run = runAgent(
+			config(),
+			{
+				callProvider: async function* () {
+					yield done("stop");
+				},
+				prepareRequest: (request, signal) => {
+					seen = signal;
+					abortedWhenAsked = signal.aborted;
+					return request;
+				},
+			},
+			{ message: userMessage("hello") },
+		);
+
+		await collect(run);
+
+		expect(seen).toBeDefined();
+		expect(abortedWhenAsked).toBe(false);
+		// The run is over, so the signal it handed out is aborted too.
+		expect(seen?.aborted).toBe(true);
+	});
+
+	test("a cancelled run does not call the provider", async () => {
+		const controller = new AbortController();
+		const entered = latch();
+		const release = latch();
+		const called = latch();
+		const run = runAgent(
+			config(),
+			{
+				callProvider: async function* () {
+					called.release();
+					yield done("stop");
+				},
+				prepareRequest: async (request) => {
+					entered.release();
+					await release.open;
+					return request;
+				},
+			},
+			{ message: userMessage("hello"), signal: controller.signal },
+		);
+
+		await entered.open;
+		controller.abort();
+		release.release();
+
+		// The request was never performed: the run was cancelled while the seam
+		// was waiting for it.
+		expect(await within(called.open, 200)).toBe(false);
+		await collect(run);
+	});
+
+	test("a cancelled run does not wait for a seam that ignores the signal", async () => {
+		const spy = spySignal();
+		const entered = latch();
+		const run = runAgent(
+			config(),
+			{
+				callProvider: async function* () {
+					yield done("stop");
+				},
+				prepareRequest: async (request) => {
+					entered.release();
+					// A seam that ignores the abort: it never answers.
+					await new Promise<ProviderRequest>(() => {});
+					return request;
+				},
+			},
+			{ message: userMessage("hello"), signal: spy.signal },
+		);
+
+		await entered.open;
+		spy.abort();
+
+		// The driver lets go of the host's signal: the run ended at the
+		// cancellation, and it did not wait for a seam that ignores the abort.
+		expect(await within(spy.released, 200)).toBe(true);
+		await collect(run);
+	});
+
+	test("a seam that returns nothing is refused, and the provider is not asked", async () => {
+		let asked = 0;
+		// A seam that forgets its `return` — what a JavaScript host does.
+		const broken = (() => undefined) as unknown as NonNullable<HarnessHost["prepareRequest"]>;
+		const run = runAgent(
+			config(),
+			{
+				callProvider: async function* () {
+					asked += 1;
+					yield done("stop");
+				},
+				prepareRequest: broken,
+			},
+			{ message: userMessage("hello") },
+		);
+
+		const { events, outcome } = await collect(run);
+
+		// The provider is not asked: a request that was never built is not one
+		// that can be performed.
+		expect(asked).toBe(0);
+		// And the run reports it the way it reports any other provider failure.
+		expect(outcome).toEqual({ kind: "completed" });
+		const assistant = transcriptOf(events).find((message) => message.role === "assistant");
+		if (!assistant || assistant.role !== "assistant") throw new Error("no assistant message");
+		expect(assistant.stopReason).toBe("error");
+		expect(assistant.errorMessage).toContain("the host returned no request");
 	});
 });

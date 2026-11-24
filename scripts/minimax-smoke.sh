@@ -3,8 +3,13 @@
 #
 # One streamed request to the OpenAI-compatible endpoint, with the key taken from
 # the environment. The key goes into the request header and nowhere else: it is
-# never printed, never written to a file and never passed on a command line that
-# the script echoes.
+# never printed, never written to a file and never passed on a command line.
+#
+# The header is handed to curl on its **standard input** (`-K -`), not on its
+# command line. Every user on the host can read the process table while a
+# request is in flight, and an argument is in the process table: a key in
+# `curl -H "Authorization: Bearer …"` is a key every user on the host can read
+# for as long as the request lasts. A config on stdin is not.
 #
 # It prints the status and the first records of the stream, and a line about the
 # shape of the answer — the fields that arrived, whether the stream carried a
@@ -30,11 +35,17 @@ BODY='{"model":"'"$MODEL"'","messages":[{"role":"user","content":"Reply with the
 TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT
 
+# The key travels in the config, which curl reads from its standard input. The
+# shell expands it into the here-document, so it never becomes an argument of
+# any process.
 STATUS=$(curl -sS -N --max-time 90 -o "$TMP" -w '%{http_code}' \
+	-K - \
 	-X POST "$BASE_URL/chat/completions" \
-	-H "Authorization: Bearer $MINIMAX_API_KEY" \
 	-H "content-type: application/json" \
-	--data "$BODY") || {
+	--data "$BODY" <<CURL_CONFIG
+header = "Authorization: Bearer $MINIMAX_API_KEY"
+CURL_CONFIG
+) || {
 	echo "minimax-smoke: the request to $BASE_URL did not complete" >&2
 	exit 1
 }

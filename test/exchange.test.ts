@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { delegate, type DelegateOptions } from "../src/exchange/delegate.ts";
-import type { ExchangeFrame } from "../src/exchange/protocol.ts";
+import { refusalOf, type ExchangeFrame } from "../src/exchange/protocol.ts";
 import type { JournalEntry } from "../src/core/journal.ts";
 
 /**
@@ -152,7 +152,33 @@ describe("the delegating side of the exchange", () => {
 
 		const outcome = await settles(task.outcome);
 		expect(outcome.kind).toBe("failed");
-		expect(outcome.kind === "failed" ? outcome.error : undefined).toBe("the backend is busy");
+		expect(outcome.kind === "failed" ? outcome.error : undefined).toEqual({
+			reason: "the backend is busy",
+		});
+	});
+
+	test("a refusal with a declaration resolves as a failure carrying both", async () => {
+		const channels = pair();
+		const task = delegate({ ...options(), port: channels.down });
+
+		channels.up.post({
+			kind: "refuse",
+			taskId: "t1",
+			reason: "the backend is busy",
+			declaration: "data, not compute",
+		});
+
+		const outcome = await settles(task.outcome);
+		expect(outcome.kind).toBe("failed");
+		// Nothing the peer said is dropped: the reason and the declaration.
+		expect(outcome.kind === "failed" ? outcome.error : undefined).toEqual({
+			reason: "the backend is busy",
+			declaration: "data, not compute",
+		});
+		// And the peer can read the declaration out of the failure.
+		expect(refusalOf(outcome.kind === "failed" ? outcome.error : undefined)?.declaration).toBe(
+			"data, not compute",
+		);
 	});
 
 	test("every event the peer sends is forwarded, the last one included", async () => {

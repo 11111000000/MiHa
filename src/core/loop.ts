@@ -22,6 +22,7 @@ import { EventStream } from "./event-stream.ts";
 import type { AgentEvent, Outcome, ProviderEvent } from "./events.ts";
 import {
 	initialState,
+	phaseOf,
 	step,
 	type HarnessConfig,
 	type Input,
@@ -144,8 +145,14 @@ export function runAgent(
 		}
 	};
 
-	/** The phase as it stands now. A call, because `apply` moves it on. */
-	const phase = (): Phase => state.phase;
+	/**
+	 * The phase as it stands now. A call, because `apply` moves it on.
+	 *
+	 * The phase is derived from the state, never stored in it (ADR 0008 D48), so the
+	 * driver reads the same label the state says — and the run is over when the label
+	 * says `finished`.
+	 */
+	const phase = (): Phase => phaseOf(state);
 
 	// The outside world may stop the run. The merged signal cuts the host's work
 	// short, but the core has to be told as well: a run that merely ran out of work
@@ -166,7 +173,7 @@ export function runAgent(
 			return;
 		}
 
-		while (state.phase !== "finished") {
+		while (phaseOf(state) !== "finished") {
 			const intent = intents.shift();
 			if (!intent) break;
 
@@ -178,7 +185,10 @@ export function runAgent(
 					let request = intent.request;
 					if (host.prepareRequest) {
 						try {
-							request = await host.prepareRequest(request, signal);
+							// The seam's wait is raced against the run's abort: a host
+							// that ignores the signal does not keep the run waiting, and
+							// a request that was not prepared is never performed.
+							request = await raceWithAbort(prepareThrough(host, request, signal), signal);
 						} catch (error) {
 							// The seam's failure is the provider's failure: it becomes an
 							// event, so the run reports it and the pairing survives (law M1).
@@ -189,9 +199,30 @@ export function runAgent(
 									message: `the request could not be prepared: ${messageOf(error)}`,
 								},
 							});
+							// A host that failed ends the turn here: there is no request to
+							// perform. An abort is the other case — the run is already over,
+							// and the phase below says so.
+							if (!signal.aborted) break;
+						}
+						if (!isRequest(request)) {
+							// The seam returned nothing. A request that was never built is
+							// not one that can be performed, so it is refused the way a
+							// seam that throws is.
+							apply({
+								kind: "provider",
+								event: {
+									type: "error",
+									message: "the request could not be prepared: the host returned no request",
+								},
+							});
 							break;
 						}
 					}
+					// The run is over — cancelled while the seam waited, or the seam
+					// failed — so the provider is not called. The seam's `await` is a
+					// window between "the core asked" and "the provider performs it",
+					// and the cancellation races throughout.
+					if (phase() === "finished") break;
 					for await (const event of host.callProvider(request, signal)) {
 						apply({ kind: "provider", event });
 						// The run is over — cancelled, or the last turn — so the rest of
@@ -239,7 +270,7 @@ export function runAgent(
 	void (async () => {
 		try {
 			await perform();
-			if (state.phase !== "finished") {
+			if (phaseOf(state) !== "finished") {
 				// The machine has no more work but has not finished. Cancel it, so no
 				// call is left unanswered.
 				apply({ kind: "cancel" });
@@ -341,6 +372,73 @@ async function runOne(entry: ToolCallPlan, context: PlanContext): Promise<void> 
  */
 function messageOf(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * The request as the seam returns it.
+ *
+ * The seam is host code, and host code may wait for something that never
+ * comes — a person who does not answer, a cache that never answers. The
+ * driver races that wait against the run's abort (see `raceWithAbort`), so a
+ * seam that ignores the signal does not keep the run waiting.
+ */
+async function prepareThrough(
+	host: HarnessHost,
+	request: ProviderRequest,
+	signal: AbortSignal,
+): Promise<ProviderRequest> {
+	if (!host.prepareRequest) return request;
+	request = await host.prepareRequest(request, signal);
+	return request;
+}
+
+/**
+ * A wait that ends when the signal aborts.
+ *
+ * The work may never settle: a host that ignores the signal would leave the
+ * driver waiting for it, and the run would never end. The abort wins the
+ * race, and the work is left behind — a promise nobody awaits any more.
+ */
+async function raceWithAbort<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+	if (signal.aborted) throw aborted(signal);
+	let onAbort: (() => void) | undefined;
+	const stopped = new Promise<never>((_resolve, reject) => {
+		onAbort = (): void => reject(aborted(signal));
+		signal.addEventListener("abort", onAbort, { once: true });
+	});
+	try {
+		return await Promise.race([work, stopped]);
+	} finally {
+		if (onAbort !== undefined) signal.removeEventListener("abort", onAbort);
+	}
+}
+
+/** The error an abort turns into. */
+function aborted(signal: AbortSignal): Error {
+	const reason: unknown = signal.reason;
+	return reason instanceof Error ? reason : new Error("the run was cancelled");
+}
+
+/**
+ * Whether a value is a provider request.
+ *
+ * The seam is host code, and host code can return nothing at all: a seam
+ * that forgets its `return` hands the provider `undefined`. A request that
+ * was never built is not one that can be performed, so the driver refuses it
+ * the way it refuses a seam that throws.
+ */
+function isRequest(value: unknown): value is ProviderRequest {
+	if (typeof value !== "object" || value === null) return false;
+	const candidate = value as {
+		readonly model?: unknown;
+		readonly messages?: unknown;
+		readonly tools?: unknown;
+	};
+	return (
+		typeof candidate.model === "string" &&
+		Array.isArray(candidate.messages) &&
+		Array.isArray(candidate.tools)
+	);
 }
 
 /**

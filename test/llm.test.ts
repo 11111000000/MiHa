@@ -201,6 +201,52 @@ describe("the adapter never throws", () => {
 		expect(events[0]?.type).toBe("error");
 	});
 
+	test("a tool call that never says which tool it is is reported, not absorbed", async () => {
+		// The call has an id but no name: nothing can be run for it, and the
+		// model has to be told. A call that vanishes is a call the model waits
+		// for forever.
+		const body = [
+			'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"arguments":"{}"}}]}}]}',
+			"",
+			'data: {"choices":[{"finish_reason":"tool_calls"}]}',
+			"",
+		].join("\n");
+
+		const provider = openaiCompat({
+			baseUrl: "http://provider.invalid/v1",
+			fetch: async () => ({ ok: true, status: 200, body: chunkStream(body) }),
+		});
+		const events = await collect(provider(request(), new AbortController().signal));
+
+		const failure = events.find((event) => event.type === "error");
+		if (failure?.type !== "error") throw new Error("no error event");
+		expect(failure.message).toContain("never identified itself");
+		expect(events.some((event) => event.type === "tool_call_start")).toBe(false);
+		expect(events.some((event) => event.type === "done")).toBe(false);
+	});
+
+	test("a delta that is not a string is not a delta", async () => {
+		// A gateway that sends `"content": null` sends no text. The string
+		// "null" would be prepended to the model's answer.
+		const body = [
+			'data: {"choices":[{"delta":{"content":null}}]}',
+			"",
+			'data: {"choices":[{"delta":{"content":"hi"}}]}',
+			"",
+			'data: {"choices":[{"finish_reason":"stop"}]}',
+			"",
+		].join("\n");
+
+		const provider = openaiCompat({
+			baseUrl: "http://provider.invalid/v1",
+			fetch: async () => ({ ok: true, status: 200, body: chunkStream(body) }),
+		});
+		const events = await collect(provider(request(), new AbortController().signal));
+
+		const deltas = events.filter((event) => event.type === "text_delta");
+		expect(deltas).toEqual([{ type: "text_delta", delta: "hi" }]);
+	});
+
 describe("the adapter lowers the request", () => {
 	test("a complete stream becomes the core's events", async () => {
 		const body = [
@@ -241,7 +287,8 @@ describe("the adapter lowers the request", () => {
 			toolResultMessage("c1", "read_file", [{ type: "text", text: "contents" }], false),
 		];
 
-		expect(toWireMessages(messages)).toEqual([
+		expect(toWireMessages("you are a test", messages)).toEqual([
+			{ role: "system", content: "you are a test" },
 			{ role: "user", content: "read a.txt" },
 			{
 				role: "assistant",
@@ -251,6 +298,12 @@ describe("the adapter lowers the request", () => {
 				],
 			},
 			{ role: "tool", tool_call_id: "c1", content: "contents" },
+		]);
+	});
+
+	test("an empty system prompt is no message at all", () => {
+		expect(toWireMessages("", [userMessage("read a.txt")])).toEqual([
+			{ role: "user", content: "read a.txt" },
 		]);
 	});
 

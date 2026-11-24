@@ -66,12 +66,13 @@ const getWeather: ToolDefinition = {
 };
 
 /** The request the captures answer. */
-function request(): ProviderRequest {
+function request(overrides: Partial<ProviderRequest> = {}): ProviderRequest {
 	return {
 		model: "MiniMax-M3",
 		system: "you are a test",
 		messages: [userMessage("hi")],
 		tools: [getWeather],
+		...overrides,
 	};
 }
 
@@ -85,6 +86,35 @@ async function eventsOf(body: string): Promise<readonly ProviderEvent[]> {
 	const events: ProviderEvent[] = [];
 	for await (const event of provider(request(), new AbortController().signal)) events.push(event);
 	return events;
+}
+
+/**
+ * The body the adapter put on the wire, and the events it made of the answer.
+ *
+ * The request is part of what the adapter does: what it asks for and what it
+ * leaves out are decisions the model sees.
+ */
+async function callOf(
+	body: string,
+	overrides: Partial<ProviderRequest> = {},
+): Promise<{ readonly sent: unknown; readonly events: readonly ProviderEvent[] }> {
+	let sent: unknown;
+	const provider = openaiCompat({
+		baseUrl: BASE_URL,
+		apiKey: undefined,
+		fetch: async (_url, init) => {
+			sent = JSON.parse(String(init.body));
+			return { ok: true, status: 200, body: bytes(body) };
+		},
+	});
+	const events: ProviderEvent[] = [];
+	for await (const event of provider(request(overrides), new AbortController().signal)) events.push(event);
+	return { sent, events };
+}
+
+/** A stream of records, as the wire sends them. */
+function stream(...records: readonly string[]): string {
+	return records.map((record) => `data: ${record}\n\n`).join("");
 }
 
 /** The records of a capture, as the SSE reader sees them. */
@@ -281,5 +311,185 @@ describe("the adapter against MiniMax", () => {
 		expect(other.length).toBeGreaterThan(0);
 		expect(failureOf(events)).toBeUndefined();
 		expect(failureOf(other)).toBeUndefined();
+	});
+});
+
+describe("the adapter against the wire", () => {
+	test("a delta that is not a string is not a delta", async () => {
+		// A gateway that sends `"content": null` sends no text. The string
+		// "null" is not what it meant, and it must not reach the transcript.
+		const body = stream(
+			'{"choices":[{"delta":{"content":null}}]}',
+			'{"choices":[{"delta":{"content":"hi"}}]}',
+			'{"choices":[{"finish_reason":"stop"}]}',
+		);
+
+		const events = await eventsOf(body);
+
+		expect(failureOf(events)).toBeUndefined();
+		expect(joined(events, "text_delta")).toBe("hi");
+		expect(count(events, "text_delta")).toBe(1);
+	});
+
+	test("a reasoning delta that is not a string is not a delta", async () => {
+		const body = stream(
+			'{"choices":[{"delta":{"reasoning_content":null}}]}',
+			'{"choices":[{"delta":{"reasoning_content":"thought"}}]}',
+			'{"choices":[{"finish_reason":"stop"}]}',
+		);
+
+		const events = await eventsOf(body);
+
+		expect(joined(events, "reasoning_delta")).toBe("thought");
+		expect(count(events, "reasoning_delta")).toBe(1);
+	});
+
+	test("a record that carries both the text and the thinking delivers both", async () => {
+		const body = stream(
+			'{"choices":[{"delta":{"content":"answer","reasoning_content":"thought"}}]}',
+			'{"choices":[{"finish_reason":"stop"}]}',
+		);
+
+		const events = await eventsOf(body);
+
+		expect(joined(events, "text_delta")).toBe("answer");
+		expect(joined(events, "reasoning_delta")).toBe("thought");
+	});
+
+	test("a stream cut short by the token limit is reported as length", async () => {
+		const body = stream(
+			'{"choices":[{"delta":{"content":"partial"}}]}',
+			'{"choices":[{"finish_reason":"length"}]}',
+		);
+
+		const events = await eventsOf(body);
+
+		const done = events.find((event) => event.type === "done");
+		if (!done || done.type !== "done") throw new Error("no done event");
+		expect(done.stopReason).toBe("length");
+	});
+
+	test("the standard spelling of the usage wins over the fallback", async () => {
+		const body = stream(
+			'{"choices":[{"finish_reason":"stop"}],"usage":{"prompt_tokens":11,"completion_tokens":3,"input":99,"output":88}}',
+		);
+
+		const events = await eventsOf(body);
+
+		const done = events.find((event) => event.type === "done");
+		if (!done || done.type !== "done") throw new Error("no done event");
+		expect(done.usage.input).toBe(11);
+		expect(done.usage.output).toBe(3);
+	});
+
+	test("the fallback spelling of the usage is still read", async () => {
+		const body = stream('{"choices":[{"finish_reason":"stop"}],"usage":{"input":7,"output":4}}');
+
+		const events = await eventsOf(body);
+
+		const done = events.find((event) => event.type === "done");
+		if (!done || done.type !== "done") throw new Error("no done event");
+		expect(done.usage.input).toBe(7);
+		expect(done.usage.output).toBe(4);
+	});
+
+	test("the counts of the first usage record survive the second", async () => {
+		// A stream may report its usage more than once, and the second record
+		// does not have to carry every count.
+		const body = stream(
+			'{"choices":[{"delta":{"content":"hi"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"completion_tokens_details":{"reasoning_tokens":3}}}',
+			'{"choices":[{"finish_reason":"stop"}],"usage":{"prompt_tokens":10}}',
+		);
+
+		const events = await eventsOf(body);
+
+		const done = events.find((event) => event.type === "done");
+		if (!done || done.type !== "done") throw new Error("no done event");
+		expect(done.usage).toEqual({
+			input: 10,
+			output: 5,
+			cacheRead: 0,
+			cacheWrite: 0,
+			reasoning: 3,
+		});
+	});
+
+	test("two interleaved calls keep their own arguments", async () => {
+		// The fragments of the two calls arrive one after the other: index 0,
+		// index 1, index 0, index 1. Only the index says which call a fragment
+		// belongs to — a tracker that correlates by arrival mixes them.
+		const body = stream(
+			'{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"get_weather","arguments":"{\\"city\\":"}}]}}]}',
+			'{"choices":[{"delta":{"tool_calls":[{"index":1,"id":"c2","function":{"name":"get_weather","arguments":"{\\"city\\":"}}]}}]}',
+			'{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"Beijing\\"}"}}]}}]}',
+			'{"choices":[{"delta":{"tool_calls":[{"index":1,"function":{"arguments":"\\"Oslo\\"}"}}]}}]}',
+			'{"choices":[{"finish_reason":"tool_calls"}]}',
+		);
+
+		const events = await eventsOf(body);
+
+		expect(failureOf(events)).toBeUndefined();
+		expect(startedIds(events)).toEqual(["c1", "c2"]);
+		const arguments_ = argumentsById(events);
+		expect(arguments_.get("c1")).toBe('{"city":"Beijing"}');
+		expect(arguments_.get("c2")).toBe('{"city":"Oslo"}');
+	});
+
+	test("a tool call that never identifies itself is reported, not absorbed", async () => {
+		// The call says what to call, but never which tool. It cannot be run,
+		// and the model must be told: a call that vanishes is a call the model
+		// waits for forever.
+		const body = stream(
+			'{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{}"}}]}}]}',
+			'{"choices":[{"finish_reason":"tool_calls"}]}',
+		);
+
+		const events = await eventsOf(body);
+
+		expect(startedIds(events)).toEqual([]);
+		expect(failureOf(events)).toContain("never identified itself");
+		// And the stream is not reported as a finished answer.
+		expect(events.some((event) => event.type === "done")).toBe(false);
+	});
+
+	test("the request asks the provider for the usage", async () => {
+		const { sent } = await callOf(fixture("minimax-m3-stream.sse"));
+
+		expect(sent).toMatchObject({ stream_options: { include_usage: true } });
+	});
+
+	test("the system prompt reaches the wire as the system message", async () => {
+		const { sent } = await callOf(fixture("minimax-m3-stream.sse"));
+
+		const body = sent as { readonly messages: readonly { readonly role: string; readonly content: string }[] };
+		expect(body.messages[0]).toEqual({ role: "system", content: "you are a test" });
+	});
+
+	test("the options bag cannot replace the adapter's own fields", async () => {
+		// The bag holds the provider's own knobs. It does not get to say which
+		// model answers, what the model is told, or that there is no stream.
+		const { sent } = await callOf(fixture("minimax-m3-stream.sse"), {
+			options: {
+				model: "hijacked",
+				messages: [],
+				tools: [],
+				stream: false,
+				temperature: 0.2,
+			},
+		});
+
+		const body = sent as {
+			readonly model: string;
+			readonly messages: readonly unknown[];
+			readonly tools: readonly unknown[];
+			readonly stream: boolean;
+			readonly temperature: number;
+		};
+		expect(body.model).toBe("MiniMax-M3");
+		expect(body.stream).toBe(true);
+		expect(body.messages.length).toBeGreaterThan(0);
+		expect(body.tools.length).toBeGreaterThan(0);
+		// The knob the host meant to turn is still turned.
+		expect(body.temperature).toBe(0.2);
 	});
 });

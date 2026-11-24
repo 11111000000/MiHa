@@ -20,7 +20,7 @@
 import type { Outcome } from "../core/events.ts";
 import type { JournalEntry } from "../core/journal.ts";
 import { JournalEntryQueue } from "./queue.ts";
-import { isExchangeFrame, protocolVersion, type ExchangeFrame, type ExchangePort } from "./protocol.ts";
+import { isExchangeFrame, protocolVersion, type ExchangeFrame, type ExchangePort, type Refusal } from "./protocol.ts";
 
 export interface DelegateOptions {
 	readonly port: ExchangePort;
@@ -63,9 +63,17 @@ export function delegate(options: DelegateOptions): DelegatedTask {
 			case "accept":
 			case "cancel":
 				return;
-			case "refuse":
-				finish({ kind: "failed", error: frame.reason });
+			case "refuse": {
+				// The refusal becomes a failure, and the failure carries the refusal:
+				// the reason the peer gave, and the declaration it made about what
+				// it can do (ADR 0011 D78). Nothing the peer said is dropped.
+				const refusal: Refusal = {
+					reason: frame.reason,
+					...(frame.declaration === undefined ? {} : { declaration: frame.declaration }),
+				};
+				finish({ kind: "failed", error: refusal });
 				return;
+			}
 			case "event":
 				events.push(frame.event);
 				return;

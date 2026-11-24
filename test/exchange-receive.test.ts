@@ -12,8 +12,14 @@ import type { JournalEntry } from "../src/core/journal.ts";
  *
  * The observer sees every frame **as it is posted**, which is what lets a test ask
  * what the peer knew at the moment it was told something.
+ *
+ * `breaks` is the broken transport: when it answers true, the frame does not go —
+ * the transport throws, and the peer hears nothing.
  */
-function fakePort(observe?: (frame: ExchangeFrame) => void): {
+function fakePort(
+	observe?: (frame: ExchangeFrame) => void,
+	breaks?: (frame: ExchangeFrame) => boolean,
+): {
 	readonly port: ExchangePort;
 	/** The frames the receiving side sent to the peer. */
 	readonly sent: ExchangeFrame[];
@@ -25,8 +31,10 @@ function fakePort(observe?: (frame: ExchangeFrame) => void): {
 	return {
 		port: {
 			post(message: unknown) {
-				sent.push(message as ExchangeFrame);
-				observe?.(message as ExchangeFrame);
+				const frame = message as ExchangeFrame;
+				if (breaks?.(frame)) throw new Error("the socket is closed");
+				sent.push(frame);
+				observe?.(frame);
 			},
 			onMessage(handler: (message: unknown) => void) {
 				handlers.push(handler);
@@ -191,7 +199,8 @@ describe("the receiving side of the exchange", () => {
 
 		const outcome = await settles(task.outcome);
 		expect(outcome.kind).toBe("failed");
-		expect(outcome.kind === "failed" ? outcome.error : undefined).toBe("not ours to read");
+		// The failure carries the refusal: the reason the peer was told.
+		expect(outcome.kind === "failed" ? outcome.error : undefined).toEqual({ reason: "not ours to read" });
 		// The task was refused, so the run never started.
 		expect(asked).toBe(0);
 	});
@@ -218,7 +227,60 @@ describe("the receiving side of the exchange", () => {
 		// And the task ends with the reason the peer was told.
 		const outcome = await settles(task.outcome);
 		expect(outcome.kind).toBe("failed");
-		expect(outcome.kind === "failed" ? outcome.error : undefined).toBe(reason);
+		expect(outcome.kind === "failed" ? outcome.error : undefined).toEqual({ reason });
+	});
+
+	test("a refusal may declare what this side can do, and the peer is told", async () => {
+		const peer = fakePort();
+		const task = receive({
+			port: peer.port,
+			taskId: "t1",
+			config: config(),
+			host: { callProvider: scriptedProvider([[done("stop")]]) },
+			decide: (): TaskDecision => ({
+				kind: "refuse",
+				reason: "not ours to read",
+				declaration: "data, not compute",
+			}),
+		});
+
+		peer.fromPeer(offer());
+
+		// The declaration travels with the refusal: the peer can show it to its own
+		// user, and it must not have to ask for it again.
+		const refuses = peer.sent.filter((frame) => frame.kind === "refuse");
+		expect(refuses).toHaveLength(1);
+		const refusal = refuses[0];
+		expect(refusal?.kind === "refuse" ? refusal.reason : undefined).toBe("not ours to read");
+		expect(refusal?.kind === "refuse" ? refusal.declaration : undefined).toBe("data, not compute");
+
+		// And the task ends with the whole refusal: nothing the peer said is dropped.
+		const outcome = await settles(task.outcome);
+		expect(outcome.kind).toBe("failed");
+		expect(outcome.kind === "failed" ? outcome.error : undefined).toEqual({
+			reason: "not ours to read",
+			declaration: "data, not compute",
+		});
+	});
+
+	test("a refusal without a declaration carries only the reason", async () => {
+		const peer = fakePort();
+		const task = receive({
+			port: peer.port,
+			taskId: "t1",
+			config: config(),
+			host: { callProvider: scriptedProvider([[done("stop")]]) },
+			decide: (): TaskDecision => ({ kind: "refuse", reason: "not ours to read" }),
+		});
+
+		peer.fromPeer(offer());
+
+		const refuses = peer.sent.filter((frame) => frame.kind === "refuse");
+		expect(refuses).toHaveLength(1);
+		expect(refuses[0]?.kind === "refuse" ? refuses[0].declaration : undefined).toBeUndefined();
+
+		const outcome = await settles(task.outcome);
+		expect(outcome.kind === "failed" ? outcome.error : undefined).toEqual({ reason: "not ours to read" });
 	});
 
 	test("a host that cannot decide refuses the task, and the task ends", async () => {
@@ -348,6 +410,104 @@ describe("the receiving side of the exchange", () => {
 		expect(journal).toEqual(entries);
 		// The local view is the same log.
 		expect(await collect(task.events)).toEqual(entries);
+	});
+
+	test("a journal hook that throws ends the task, and the peer keeps what was written", async () => {
+		const peer = fakePort();
+		let written = 0;
+		const task = receive({
+			port: peer.port,
+			taskId: "t1",
+			config: config(),
+			host: {
+				callProvider: scriptedProvider([[done("stop")]]),
+				append: () => {
+					written += 1;
+					// The second entry cannot be written.
+					if (written === 2) throw new Error("the disk is full");
+				},
+			},
+		});
+
+		peer.fromPeer(offer());
+
+		// The task ends with a failure that says so: the peer is not left waiting.
+		const outcome = await settles(task.outcome);
+		expect(outcome.kind).toBe("failed");
+		expect(String(outcome.kind === "failed" ? outcome.error : undefined)).toContain("the disk is full");
+
+		// The peer has the entries that were written before the failure, and not the
+		// one that could not be written: the peer gets what we wrote.
+		const entries = sentEntries(peer.sent);
+		expect(entries).toHaveLength(1);
+		expect(entries[0]?.kind).toBe("message");
+
+		// And the peer was told how the task ended.
+		const results = peer.sent.filter((frame) => frame.kind === "result");
+		expect(results).toHaveLength(1);
+	});
+
+	test("a transport that throws ends the task, and the peer is not left waiting", async () => {
+		// The transport is broken from the first frame on.
+		const peer = fakePort(undefined, () => true);
+		let asked = 0;
+		const provider: HarnessHost["callProvider"] = async function* () {
+			asked += 1;
+		};
+		const task = receive({
+			port: peer.port,
+			taskId: "t1",
+			config: config(),
+			host: { callProvider: provider },
+		});
+
+		peer.fromPeer(offer());
+
+		// The task ends as a failure carrying the reason: a peer that waits for an
+		// answer that is not coming is a peer that waits forever.
+		const outcome = await settles(task.outcome);
+		expect(outcome.kind).toBe("failed");
+		expect(String(outcome.kind === "failed" ? outcome.error : undefined)).toContain(
+			"the peer could not be reached",
+		);
+		expect(String(outcome.kind === "failed" ? outcome.error : undefined)).toContain("the socket is closed");
+		// The run never started: the peer never heard the accept.
+		expect(asked).toBe(0);
+		expect(peer.sent).toHaveLength(0);
+	});
+
+	test("a transport that breaks mid-run ends the task, and the journal keeps its entries", async () => {
+		const journal: JournalEntry[] = [];
+		let events = 0;
+		const peer = fakePort(undefined, (frame) => {
+			if (frame.kind !== "event") return false;
+			events += 1;
+			// The second entry cannot be delivered.
+			return events > 1;
+		});
+		const task = receive({
+			port: peer.port,
+			taskId: "t1",
+			config: config(),
+			host: {
+				callProvider: scriptedProvider([[done("stop")]]),
+				append: (entry) => journal.push(entry),
+			},
+		});
+
+		peer.fromPeer(offer());
+
+		const outcome = await settles(task.outcome);
+		expect(outcome.kind).toBe("failed");
+		expect(String(outcome.kind === "failed" ? outcome.error : undefined)).toContain(
+			"the peer could not be reached",
+		);
+
+		// The run's own journal keeps the entries it wrote: the failure is in the
+		// communication, not in the run.
+		expect(journal.length).toBeGreaterThanOrEqual(2);
+		// And the peer has the entries that went before the transport broke.
+		expect(sentEntries(peer.sent)).toHaveLength(1);
 	});
 
 	test("every frame we send carries our task id", async () => {
@@ -832,6 +992,45 @@ describe("the receiving side of the exchange", () => {
 		const refusal = entries.find((entry) => entry.kind === "block");
 		expect(refusal?.kind).toBe("block");
 		expect(refusal?.kind === "block" ? refusal.reason : "").toBe("not allowed here");
+	});
+
+	test("the approve seam sees our tool as it is: the same name, the same dialect", async () => {
+		const peer = fakePort();
+		const own: ToolDefinition = {
+			...readFile,
+			execute: async () => ({ content: [] }),
+		};
+		let seen: ToolDefinition | undefined;
+		const script: readonly (readonly ProviderEvent[])[] = [
+			[
+				{ type: "tool_call_start", id: "c1", name: "read_file" },
+				{ type: "tool_arguments_delta", id: "c1", delta: '{"path":"a.txt"}' },
+				done("toolUse"),
+			],
+			[{ type: "text_delta", delta: "done" }, done("stop")],
+		];
+		const task = receive({
+			port: peer.port,
+			taskId: "t1",
+			config: config(8, [own]),
+			host: {
+				callProvider: scriptedProvider(script),
+				approve: async (context) => {
+					seen = context.tool;
+					return { kind: "allow" };
+				},
+			},
+		});
+
+		peer.fromPeer(offer());
+		await settles(task.outcome);
+
+		// The seam saw our tool as it is: the same name, the same dialect, the same
+		// behaviour. Only the reference differs — the receiving side counts the
+		// running promises, and only a wrapper can do that (ADR 0011 D81).
+		expect(seen?.name).toBe(own.name);
+		expect(seen?.description).toBe(own.description);
+		expect(seen?.parameters).toEqual(own.parameters);
 	});
 
 	test("a second offer for the same task does not start a second run", async () => {

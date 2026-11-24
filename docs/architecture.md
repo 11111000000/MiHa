@@ -132,9 +132,22 @@ The provider layer speaks the OpenAI-compatible wire, and **MiniMax-M3** is the 
 was measured against: its thinking arrives in a separate field only when asked for
 (`reasoning_split`), its stream ends on a `finish_reason` rather than on `[DONE]`, and
 its usage is counted in the wire's own spelling ([ADR 0014](./adr/0014-minimax.md)
-D71–D76).
+D71–D76). What the first live capture broke is written down too: a delta is a string
+and nothing else, a call that never identifies itself is reported rather than absorbed,
+the usage of a turn is the largest report of each count, the options bag holds the
+provider's knobs and cannot replace the adapter's fields, and the system prompt is the
+first message of the wire ([ADR 0015](./adr/0015-provider-defects.md) D82–D90).
 
-### 2.5 The peer, on both sides
+### 2.5 The interface layer
+
+The agent may **draw**: a component registry (what the host's interface is made of), a
+**flat spec** (what the agent asks for — data, never code), patches (the host's own
+substitutions) and the tree the layer produces ([ADR 0016](./adr/0016-interface-layer.md)
+D91–D98). A spec is refused before rendering when it names a component the registry does
+not have or a property it does not declare, and the same spec always produces the same
+tree. A refusal is a first-class event, not folded into the tool result (D98).
+
+### 2.6 The peer, on both sides
 
 The exchange is symmetric: the delegating side offers a task, and the **receiving
 side** accepts it, runs it with **its own** tools, and sends the run's journal
@@ -145,7 +158,7 @@ A **cassette** records the provider's responses under the hash of the request th
 asked for them, and replays a run without a network ([ADR 0012](./adr/0012-cassette.md)).
 The journal is the trace; the cassette holds only what the journal cannot.
 
-### 2.6 The host surface — seven hooks, and nothing else
+### 2.7 The host surface — seven hooks, and nothing else
 
 | Hook | The host provides | May not |
 |---|---|---|
@@ -235,7 +248,7 @@ the context, one result — are all bounded by a number.
 | `exchange/` | the peer protocol, both directions | 279 | ~350 |
 | `worker/` | the capability bridge, the realm host | 181 | ~250 |
 | `trace/` | the cassette — the provider responses only | 158 | ~180 |
-| `ui/` | the registry, the interface spec, the patches | — | ~800 |
+| `ui/` | the registry, the flat spec, the patches, the tree | 407 | ~800 |
 | | | **1 909** | **≈3 350** |
 
 **Bundle: 5 103 B gzip now, ≈12–14 KB projected.** Zero runtime dependencies.

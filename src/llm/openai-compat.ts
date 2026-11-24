@@ -54,10 +54,30 @@ interface WireToolCall {
 }
 
 interface WireMessage {
-	readonly role: "user" | "assistant" | "tool";
+	readonly role: "system" | "user" | "assistant" | "tool";
 	readonly content: string | null;
 	readonly tool_call_id?: string;
 	readonly tool_calls?: readonly WireToolCall[];
+}
+
+/** One fragment of a tool call, as the wire sends it. */
+interface WireToolCallDelta {
+	readonly index?: number;
+	readonly id?: string;
+	readonly function?: { readonly name?: string; readonly arguments?: string };
+}
+
+/**
+ * The delta of one assistant message, as the wire sends it.
+ *
+ * The fields are nullable because the wire says so: a gateway that sends
+ * `"content": null` sends **no** content, and the adapter has to read that as
+ * the absence of a delta rather than as the string "null".
+ */
+interface WireDelta {
+	readonly content?: string | null;
+	readonly reasoning_content?: string | null;
+	readonly tool_calls?: readonly WireToolCallDelta[];
 }
 
 function textOf(content: readonly ContentBlock[]): string {
@@ -68,9 +88,21 @@ function textOf(content: readonly ContentBlock[]): string {
 	return text;
 }
 
-/** Lowers the core's messages to the wire format. */
-export function toWireMessages(messages: readonly AgentMessage[]): readonly WireMessage[] {
+/**
+ * Lowers the core's request to the wire format.
+ *
+ * The system prompt is the **first** message, the way the wire expects it: the
+ * model's instructions are a message of their own, and a request that leaves
+ * them out asks a question the host never asked.
+ */
+export function toWireMessages(
+	system: string,
+	messages: readonly AgentMessage[],
+): readonly WireMessage[] {
 	const wire: WireMessage[] = [];
+	if (system !== "") {
+		wire.push({ role: "system", content: system });
+	}
 	for (const message of messages) {
 		switch (message.role) {
 			case "user": {
@@ -146,7 +178,7 @@ interface WireUsage {
 }
 
 /**
- * The usage as the core counts it.
+ * The usage as the core counts it, as far as the wire reports it.
  *
  * The OpenAI-compatible wire spells the counts `prompt_tokens` and
  * `completion_tokens` — MiniMax follows it — and some gateways spell them `input`
@@ -157,22 +189,52 @@ interface WireUsage {
  * `completion_tokens_details.reasoning_tokens`. The cached prompt tokens are the
  * ones the provider read from its cache, which is what the core calls a cache
  * read.
+ *
+ * A count the record does not mention is **absent**, not zero: a record that says
+ * nothing about the output does not say the output was zero.
  */
-function usageOf(wire: WireUsage): Usage {
+function usageOf(wire: WireUsage): Partial<Usage> {
 	return {
-		input: wire.prompt_tokens ?? wire.input ?? 0,
-		output: wire.completion_tokens ?? wire.output ?? 0,
-		cacheRead: wire.prompt_tokens_details?.cached_tokens ?? wire.cacheRead ?? 0,
-		cacheWrite: wire.cacheWrite ?? 0,
-		reasoning: wire.completion_tokens_details?.reasoning_tokens ?? wire.reasoning ?? 0,
+		input: wire.prompt_tokens ?? wire.input,
+		output: wire.completion_tokens ?? wire.output,
+		cacheRead: wire.prompt_tokens_details?.cached_tokens ?? wire.cacheRead,
+		cacheWrite: wire.cacheWrite,
+		reasoning: wire.completion_tokens_details?.reasoning_tokens ?? wire.reasoning,
 	};
+}
+
+/**
+ * The usage of the turn so far.
+ *
+ * A stream may report its usage more than once, and a later record does not
+ * have to carry every count: a record that mentions only the prompt leaves the
+ * output and the reasoning as they were. Within one turn the counts only grow,
+ * so the largest report of each count is the truest one.
+ */
+function mergeUsage(current: Usage, addition: Partial<Usage>): Usage {
+	return {
+		input: larger(current.input, addition.input),
+		output: larger(current.output, addition.output),
+		cacheRead: larger(current.cacheRead, addition.cacheRead),
+		cacheWrite: larger(current.cacheWrite, addition.cacheWrite),
+		reasoning: larger(current.reasoning, addition.reasoning),
+	};
+}
+
+/** The larger of two counts, where an absent count says nothing. */
+function larger(current: number, addition: number | undefined): number {
+	return addition === undefined ? current : Math.max(current, addition);
 }
 
 /**
  * Creates an OpenAI-compatible provider.
  *
  * The options bag of the request is passed through to the wire verbatim, so a host
- * can reach a provider knob MiHa has never heard of.
+ * can reach a provider knob MiHa has never heard of. It is spread **before** the
+ * adapter's own fields: the bag holds the provider's knobs (`temperature`,
+ * `max_completion_tokens`, MiniMax's `thinking` and `reasoning_split`), and it does
+ * not get to say which model answers, what the model is told, or that there is no
+ * stream at all.
  */
 export function openaiCompat(options: OpenAiCompatOptions): ProviderFn {
 	return async function* provider(request, signal) {
@@ -184,12 +246,12 @@ export function openaiCompat(options: OpenAiCompatOptions): ProviderFn {
 		if (options.apiKey !== undefined) headers.authorization = `Bearer ${options.apiKey}`;
 
 		const body = {
+			...(request.options ?? {}),
 			model: request.model,
-			messages: toWireMessages(request.messages),
+			messages: toWireMessages(request.system, request.messages),
 			tools: toWireTools(request.tools),
 			stream: true,
 			stream_options: { include_usage: true },
-			...(request.options ?? {}),
 		};
 
 		let response: ProviderResponse;
@@ -229,15 +291,7 @@ export function openaiCompat(options: OpenAiCompatOptions): ProviderFn {
 				let chunk: {
 					choices?: readonly {
 						finish_reason?: unknown;
-						delta?: {
-							content?: string;
-							reasoning_content?: string;
-							tool_calls?: readonly {
-								index?: number;
-								id?: string;
-								function?: { name?: string; arguments?: string };
-							}[];
-						};
+						delta?: WireDelta;
 					}[];
 					usage?: WireUsage;
 				};
@@ -258,36 +312,41 @@ export function openaiCompat(options: OpenAiCompatOptions): ProviderFn {
 					sawTerminal = true;
 				}
 				if (chunk.usage) {
-					usage = usageOf(chunk.usage);
+					usage = mergeUsage(usage, usageOf(chunk.usage));
 				}
 
 				const delta = choice?.delta;
-				if (delta?.content !== undefined && delta.content !== "") {
-					yield { type: "text_delta", delta: delta.content };
-				}
-				if (delta?.reasoning_content !== undefined && delta.reasoning_content !== "") {
-					yield { type: "reasoning_delta", delta: delta.reasoning_content };
-				}
-				for (const call of delta?.tool_calls ?? []) {
-					if (call.index === undefined) {
-						// A call without a stream index cannot be correlated with the
-						// others. Merging it into the first one would hand the model
-						// somebody else's arguments, so it is refused.
-						yield {
-							type: "error",
-							message: "the provider sent a tool call without a stream index",
-						};
-						return;
+				if (delta !== undefined) {
+					// A delta is a string. A gateway that sends `null` sends no
+					// delta at all: the text "null" is not what it meant, and it
+					// would be prepended to the model's answer.
+					if (typeof delta.content === "string" && delta.content !== "") {
+						yield { type: "text_delta", delta: delta.content };
 					}
-					const events = tracker.feed({
-						index: call.index,
-						...(call.id === undefined ? {} : { id: call.id }),
-						...(call.function?.name === undefined ? {} : { name: call.function.name }),
-						...(call.function?.arguments === undefined
-							? {}
-							: { argumentsDelta: call.function.arguments }),
-					});
-					for (const event of events) yield event;
+					if (typeof delta.reasoning_content === "string" && delta.reasoning_content !== "") {
+						yield { type: "reasoning_delta", delta: delta.reasoning_content };
+					}
+					for (const call of delta.tool_calls ?? []) {
+						if (call.index === undefined) {
+							// A call without a stream index cannot be correlated with the
+							// others. Merging it into the first one would hand the model
+							// somebody else's arguments, so it is refused.
+							yield {
+								type: "error",
+								message: "the provider sent a tool call without a stream index",
+							};
+							return;
+						}
+						const events = tracker.feed({
+							index: call.index,
+							...(call.id === undefined ? {} : { id: call.id }),
+							...(call.function?.name === undefined ? {} : { name: call.function.name }),
+							...(call.function?.arguments === undefined
+								? {}
+								: { argumentsDelta: call.function.arguments }),
+						});
+						for (const event of events) yield event;
+					}
 				}
 			}
 		} catch (error) {
@@ -297,6 +356,19 @@ export function openaiCompat(options: OpenAiCompatOptions): ProviderFn {
 
 		if (!sawTerminal) {
 			yield { type: "error", message: "the provider closed the stream without a terminal event" };
+			return;
+		}
+
+		const unidentified = tracker.unidentified;
+		if (unidentified.length > 0) {
+			// The model asked for a tool and never said which one. Nothing can be
+			// run for it, so it is reported rather than absorbed: a call that
+			// vanishes is a call the model waits for forever, and a run that
+			// claims success over it is a lie.
+			yield {
+				type: "error",
+				message: `the provider sent a tool call that never identified itself (index ${unidentified.join(", ")})`,
+			};
 			return;
 		}
 

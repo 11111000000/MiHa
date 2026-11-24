@@ -13,8 +13,14 @@
  * **The task ends when our own work is done, not when the machine says so.** The
  * core ends a run when the machine is finished, and the machine can be finished
  * while one of our own tools is still winding down after an abort. So the receiving
- * side wraps its own provider and its own tools, watches them finish, and only then
- * tells the peer that the task is over (ADR 0011 D62).
+ * side counts the calls that are still running — the tools the journal says are
+ * waiting for an answer, and the provider call in flight — and only then tells the
+ * peer that the task is over (ADR 0011 D62).
+ *
+ * **A task that cannot be answered must not stay open.** A transport that throws
+ * and a journal hook that throws both end the task as a failure that says so: a peer
+ * that waits for an answer that is not coming is a peer that waits forever
+ * (ADR 0011 D79, D81).
  */
 
 import { runAgent } from "../core/loop.ts";
@@ -22,25 +28,28 @@ import type { HarnessHost } from "../core/loop.ts";
 import type { HarnessConfig } from "../core/run.ts";
 import type { Outcome, ProviderEvent } from "../core/events.ts";
 import { userMessage } from "../core/messages.ts";
-import { toolRegistry } from "../core/tools.ts";
 import type { JournalEntry } from "../core/journal.ts";
 import { JournalEntryQueue } from "./queue.ts";
+import { toolRegistry } from "../core/tools.ts";
 import {
 	isExchangeFrame,
 	protocolVersion,
 	type ExchangeFrame,
 	type ExchangePort,
 	type OfferFrame,
+	type Refusal,
 } from "./protocol.ts";
 
 /**
  * The host's answer to an offer: take the task, or refuse it and say why.
  *
  * A refusal without a reason is not a refusal the peer can act on: it is a shrug.
+ * A refusal may also carry a **declaration** of what this side can do — "data, not
+ * compute" — which the peer can show to its own user (ADR 0011 D78).
  */
 export type TaskDecision =
 	| { readonly kind: "accept" }
-	| { readonly kind: "refuse"; readonly reason: string };
+	| { readonly kind: "refuse"; readonly reason: string; readonly declaration?: string };
 
 export interface ReceiveOptions {
 	readonly port: ExchangePort;
@@ -53,7 +62,8 @@ export interface ReceiveOptions {
 	/**
 	 * The host's answer to "shall we take this task?".
 	 *
-	 * Absent, every task is taken. A refusal carries the reason the peer is told.
+	 * Absent, every task is taken. A refusal carries the reason the peer is told, and
+	 * may carry a declaration of what this side can do.
 	 */
 	readonly decide?: (offer: OfferFrame) => TaskDecision;
 }
@@ -125,60 +135,109 @@ export function receive(options: ReceiveOptions): ReceivedTask {
 	/** Whether the task is over: the peer was told, and the outcome settled. */
 	let over = false;
 
-	/** Ends the task: the peer gets the outcome, and the entries stop. */
-	const finish = (result: Outcome): void => {
-		if (over) return;
-		over = true;
+	/** Settles the outcome and closes the entries. */
+	const settleOutcome = (result: Outcome): void => {
 		settle?.(result);
 		settle = undefined;
 		events.close();
 	};
 
+	/** Ends the task: the peer gets the outcome, and the entries stop. */
+	const finish = (result: Outcome): void => {
+		if (over) return;
+		over = true;
+		settleOutcome(result);
+	};
+
+	/**
+	 * Posts a frame to the peer, and hands back the failure when there is one.
+	 *
+	 * The transport's failure is not hidden here: the caller decides what a frame
+	 * that did not go means.
+	 */
+	const post = (frame: ExchangeFrame): Error | undefined => {
+		try {
+			port.post(frame);
+			return undefined;
+		} catch (error) {
+			return error instanceof Error ? error : new Error(String(error));
+		}
+	};
+
+	/**
+	 * Ends the task as a failure, and tells the peer why.
+	 *
+	 * The peer is owed an answer. A task that ends without one leaves the peer
+	 * waiting, and a peer that waits learns nothing.
+	 */
+	const fail = (error: string): void => {
+		if (over) return;
+		over = true;
+		// The frame goes out even though the task is over: this is the last thing
+		// the peer hears, and it is the answer.
+		post({ kind: "result", taskId, outcome: { kind: "failed", error } });
+		settleOutcome({ kind: "failed", error });
+	};
+
 	/**
 	 * Sends a frame to the peer.
 	 *
-	 * A transport that throws must not take the run down with it: the host's own
-	 * journal is still the truth, and a peer that cannot hear us is the transport's
-	 * problem, not the run's.
+	 * A transport that throws ends the task: the peer cannot hear us, so it would
+	 * wait for an answer that is not coming (ADR 0011 D79). The failure carries the
+	 * reason, the outcome settles, and the run's own journal keeps the entries it
+	 * wrote — the run is not the transport's business.
 	 */
-	const send = (frame: ExchangeFrame): void => {
-		try {
-			port.post(frame);
-		} catch {
-			// The peer is gone. The run goes on, and its entries stay in our journal.
-		}
+	const send = (frame: ExchangeFrame): boolean => {
+		if (over) return false;
+		const failure = post(frame);
+		if (failure === undefined) return true;
+		fail(`the peer could not be reached: ${failure.message}`);
+		return false;
 	};
 
 	/** Ends the task, and tells the peer how it ended. */
 	const end = (result: Outcome): void => {
 		if (over) return;
-		send({ kind: "result", taskId, outcome: result });
-		finish(result);
+		over = true;
+		const failure = post({ kind: "result", taskId, outcome: result });
+		if (failure !== undefined) {
+			// The answer did not go, so the task did not do what it was for.
+			settleOutcome({ kind: "failed", error: `the peer could not be reached: ${failure.message}` });
+			return;
+		}
+		settleOutcome(result);
 	};
 
 	/**
-	 * How many of our own calls are still running.
+	 * The calls of ours that are still running.
 	 *
-	 * The core ends a run when the machine is finished, and the machine can be
-	 * finished while one of our own tools is still winding down after an abort. The
-	 * peer must not hear that the task is over before our own work is done — so the
-	 * result waits for our own calls to finish. Only they can hold the driver open,
-	 * and they are ours.
+	 * The count is over **promises**, not over journal entries: the journal says a
+	 * call was *answered*, and on a cancellation the synthetic answer is written
+	 * before the tool has noticed the abort — so the journal cannot tell "answered"
+	 * from "stopped". Only the promise can.
+	 *
+	 * The cost is the tools' identity: the approve seam sees our wrapper rather than
+	 * the host's own instance. The wrapper has the same name, the same dialect and
+	 * the same behaviour; only the reference differs (ADR 0011 D81).
 	 */
 	let running = 0;
+
+	/** How many provider calls of ours are in flight. */
+	let calling = 0;
+
+	/** The waiters for "our own calls are done". */
 	const idle: (() => void)[] = [];
 
-	/** Marks one of our calls as done, and wakes the waiter when the last is. */
-	const finished = (): void => {
-		running -= 1;
-		if (running !== 0) return;
+	/** Wakes the waiters when the last of our calls is done. */
+	const wake = (): void => {
+		if (running !== 0 || calling !== 0) return;
 		const waiters = idle.splice(0);
 		for (const waiter of waiters) waiter();
 	};
 
 	/** Resolves when none of our calls is running. */
 	const whenIdle = (): Promise<void> =>
-		running === 0
+		running === 0 && calling === 0
 			? Promise.resolve()
 			: new Promise<void>((resolve) => {
 					idle.push(resolve);
@@ -187,8 +246,8 @@ export function receive(options: ReceiveOptions): ReceivedTask {
 	/**
 	 * Our own tools, wrapped so that the receiving side can see them finish.
 	 *
-	 * The wrappers are ours: the same names, the same dialect, the same behaviour.
-	 * They only count.
+	 * The wrapper only counts: the name, the dialect and the behaviour are the host's
+	 * (ADR 0011 D81).
 	 */
 	const tools = toolRegistry(
 		[...config.tools.values()].map((tool) => ({
@@ -198,46 +257,65 @@ export function receive(options: ReceiveOptions): ReceivedTask {
 				try {
 					return await tool.execute(call, args, signal, report);
 				} finally {
-					finished();
+					running -= 1;
+					wake();
 				}
 			},
 		})),
 	);
 
-	/** Our own provider, wrapped the same way. */
+	/** Our own provider, wrapped so that the receiving side can see it let go. */
 	const callProvider: HarnessHost["callProvider"] = (request, signal) => {
 		const inner = host.callProvider(request, signal);
 		return (async function* (): AsyncGenerator<ProviderEvent> {
-			running += 1;
+			calling += 1;
 			try {
 				yield* inner;
 			} finally {
-				finished();
+				calling -= 1;
+				wake();
 			}
 		})();
 	};
 
 	/**
-	 * The host, with the journal hook and the calls wrapped.
+	 * The host, with the provider call wrapped and the journal hook kept.
 	 *
 	 * The entries go to our host first — it is the one that keeps them — and then to
-	 * the peer, as `event` frames, in the order they were written.
+	 * the peer, as `event` frames, in the order they were written. **Our journal is
+	 * the truth: the peer gets what we wrote** (ADR 0011 D81).
 	 */
 	const wired: HarnessHost = {
 		...host,
 		callProvider,
 		append: (entry) => {
-			host.append?.(entry);
+			try {
+				host.append?.(entry);
+			} catch (error) {
+				// The journal hook failed: the entry was not written, so it is not
+				// sent, and the task ends with a failure that says so. The entries
+				// written before it did reach the peer.
+				fail(`the journal could not be written: ${messageOf(error)}`);
+				// A run whose journal cannot be written is a run nobody can check.
+				controller.abort();
+				return;
+			}
 			send({ kind: "event", taskId, event: entry });
 			events.push(entry);
 		},
 	};
 
 	/** Refuses the task, and tells the peer why. */
-	const refuse = (reason: string): void => {
+	const refuse = (reason: string, declaration?: string): void => {
 		if (over) return;
-		send({ kind: "refuse", taskId, reason });
-		finish({ kind: "failed", error: reason });
+		const refusal: Refusal = { reason, ...(declaration === undefined ? {} : { declaration }) };
+		send({
+			kind: "refuse",
+			taskId,
+			reason,
+			...(declaration === undefined ? {} : { declaration }),
+		});
+		finish({ kind: "failed", error: refusal });
 	};
 
 	/** Whether the task was already taken: one offer, one run. */
@@ -305,11 +383,14 @@ export function receive(options: ReceiveOptions): ReceivedTask {
 			return;
 		}
 		if (decision.kind === "refuse") {
-			refuse(stated(decision.reason));
+			refuse(stated(decision.reason), decision.declaration);
 			return;
 		}
 
-		send({ kind: "accept", taskId });
+		// The peer has to hear the accept before the run starts. A transport that
+		// throws here ends the task — and the run never starts, because the peer
+		// never heard that the task was taken (ADR 0011 D79).
+		if (!send({ kind: "accept", taskId })) return;
 		void run(offer);
 	};
 
