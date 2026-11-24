@@ -51,6 +51,7 @@ qualities of the harness itself: **effective · reliable · small · frugal**.
 | Path | What |
 |---|---|
 | `docs/plan.md` | **the route through the work**: what is built, in what order, how each piece is proved |
+| `docs/tooling-gaps.md` | two gaps in `mathc` found by running the method here, for the tool's owner |
 | `docs/architecture.md` | **the final architecture**: how everything works |
 | `docs/target-architecture.md` | the derivation: four qualities, five budgets, one memory law |
 | `docs/method.md` | **how this repository is developed**: the claim → code → proof → commit loop and the gate |
