@@ -17,6 +17,9 @@ REMOTE="${1:-origin}"
 REMOTE="$(git remote get-url "$REMOTE")"
 STAGE="$(mktemp -d /tmp/miha-gh-pages.XXXXXX)"
 
+echo "── checking the diagrams ──────────────────────────────"
+python3 site/check-diagrams.py
+
 echo "── building the example ───────────────────────────────"
 sh examples/browser/build.sh
 
