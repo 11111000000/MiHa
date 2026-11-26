@@ -1,5 +1,9 @@
 # MiHa
 
+<p align="center">
+  <img src="site/assets/logo.svg" width="96" alt="the MiHa mark: a page holding three journal entries, the newest in the accent colour">
+</p>
+
 **A minimal agent harness for the frontend, with a symmetric peer on the backend.**
 
 MiHa is a small library an application embeds so it can run an agent loop, call tools,
