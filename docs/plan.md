@@ -6,8 +6,10 @@ route through them.
 
 ## The shape
 
-A **decentralised agent harness**: small enough to embed in any application, fast
-enough to sit in a worker, and able to hand work to a peer agent and take it back.
+An **embeddable agent harness**: small enough to embed in any application, fast
+enough to sit in a worker. When the page is not enough, an optional peer layer hands
+tasks to a backend instance of the same harness and takes the results back
+([ADR 0020](./adr/0020-embeddable-first.md)).
 
 ```
 frontend application          backend peer
@@ -16,9 +18,9 @@ frontend application          backend peer
 │  ┌─────────────┐  │  offer  │  credentials      │
 │  │ MiHa worker │◄─┼─────────┼─► MiHa            │
 │  │  loop+tools │  │  event  │                   │
-│  └─────────────┘  │◄────────┼─► call/answer     │
-│  host bridge:    │         │                   │
-│  DOM, storage    │         │                   │
+│  └─────────────┘  │◄────────┼─► offer/event/    │
+│  host bridge:    │         │   result          │
+│  DOM, storage    │         │  (optional peer)  │
 └───────────────────┘         └───────────────────┘
 ```
 
@@ -30,7 +32,7 @@ frontend application          backend peer
 | 2 | **Correct** — every law has a derivation and a test | ADR 0004 D22, ADR 0005 D24–D28, ADR 0006 | `bun test` + the math-coding claims |
 | 3 | **Simple** — the core performs no I/O, the run is a small state machine | ADR 0005 D24, D25 | the state machine has six states and no hidden control flow |
 | 4 | **Functional** — the whole class of agent tasks: a loop with tools | ADR 0005 D26–D29 | the golden traces of the scenarios |
-| 5 | **Decentralised** — a peer may hand work over and may call back | ADR 0005 D30 | the exchange conformance suite |
+| 5 | **Optional** — the peer layer comes out; the harness stands alone in the page | ADR 0020 D106 | `bun test test/peer-optional.test.ts` |
 
 ## The order of work
 

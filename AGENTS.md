@@ -1,8 +1,10 @@
 # AGENTS.md — MiHa
 
-**MiHa** is a very small, embeddable harness for a decentralised agent: it runs in a
-browser, hands work to a backend peer and takes it back, and it is written to be an
-example rather than merely to work.
+**MiHa** is a very small, embeddable agent harness for browser applications: it runs
+in a worker, calls the application's own tools, and streams what happened into the
+application's own interface. When the agent needs what a page cannot reach, an
+optional peer layer hands a task to a backend instance of the same harness. It is
+written to be an example rather than merely to work.
 
 The full decision record is in `docs/adr/`; the route through the work is
 `docs/plan.md`; how the project is developed is `docs/method.md`. Read those before

@@ -37,7 +37,8 @@ itself), the session (a prefix), and what a peer is handed (the same events). Th
 is a pure function over that journal; a driver performs what the core asks; the host
 owns everything privileged — the model, the policy, the storage, the screen, the
 capabilities. The agent runs in a page, in a worker, on a server, or on several at once,
-handing **tasks** across — never tools.
+handing **tasks** across — never tools (an optional layer,
+[ADR 0020](./adr/0020-embeddable-first.md) D106).
 
 ```
       the host (the application)              the run
@@ -48,7 +49,7 @@ handing **tasks** across — never tools.
 │ prepareRequest()               │   │   races the cancellation      │
 │ persist() — the journal store  │◄──┤   emits live deltas (ephemeral)│
 │ capabilities (DOM, storage)    │   ├────────────────────────────────┤
-│ the peer link ──── task ──────┼──►│ the core: step(state, input)   │
+│ the peer link (opt.) ─ task ──┼──►│ the core: step(state, input)   │
 │ the interface ◄─── the journal │   │   phase = f(journal tail)     │
 └────────────────────────────────┘   ├────────────────────────────────┤
                                      │ the journal (durable, windowed)│
@@ -154,12 +155,23 @@ D91–D98). A spec is refused before rendering when it names a component the reg
 not have or a property it does not declare, and the same spec always produces the same
 tree. A refusal is a first-class event, not folded into the tool result (D98).
 
-### 2.7 The peer, on both sides
+### 2.7 The optional peer
 
-The exchange is symmetric: the delegating side offers a task, and the **receiving
-side** accepts it, runs it with **its own** tools, and sends the run's journal
-entries back as they are written ([ADR 0011](./adr/0011-receiving-side.md)). A peer
-gets a task, never a callable handle.
+The peer layer is optional. The core stands without it — no file under `src/core/`
+imports the exchange, and a claim checks that — and an embedding adds it when the
+agent needs what a page cannot reach: secrets, databases, heavy compute, long jobs.
+
+When it is added, the exchange is symmetric: the delegating side offers a task, and
+the **receiving side** accepts it, runs it with **its own** tools, and sends the
+run's journal entries back as they are written ([ADR 0011](./adr/0011-receiving-side.md)).
+A peer gets a task, never a callable handle.
+
+The wire is MiHa's own task protocol — an interface between two instances of the
+same harness, for links their owner controls. It authenticates nobody today, so it
+belongs on trusted channels — localhost, a LAN, a VPN — until an auth layer exists
+([ADR 0020](./adr/0020-embeddable-first.md) D108). When interop with other agents
+matters, an adapter behind `ExchangePort` carries the same six frames; the boundary
+stays.
 
 A **cassette** records the provider's responses under the hash of the request that
 asked for them, and replays a run without a network ([ADR 0012](./adr/0012-cassette.md)).
@@ -176,7 +188,7 @@ The journal is the trace; the cassette holds only what the journal cannot.
 | `summarize()` | write a better digest of what the core collapsed ([ADR 0017](./adr/0017-tool-timeout-and-host-digest.md) D100) | rewrite the history |
 | `persist` | where entries live | edit an entry |
 | capabilities | what a worker may reach: the DOM, storage | grant past the realm's end |
-| the peer link | a task, in either direction | call the other side's tools |
+| the peer link (optional) | a task, in either direction | call the other side's tools |
 
 **A peer gets a task, never a capability.** The receiving side is `delegate()` read
 from the other end plus `runAgent`: accept or refuse, run one's own agent on the task
@@ -253,7 +265,7 @@ the context, one result — are all bounded by a number.
 | `core/` | the journal, the projection, the state machine, the driver, the tool contract | 1 006 | ~1 300 |
 | `schema/` | the tool-parameter dialect | 258 | 258 |
 | `llm/` | the SSE reader, the call tracker, one adapter | 328 | ~450 |
-| `exchange/` | the peer protocol, both directions | 279 | ~350 |
+| `exchange/` | the optional peer's protocol, both directions | 279 | ~350 |
 | `worker/` | the capability bridge, the realm host | 181 | ~250 |
 | `trace/` | the cassette — the provider responses only | 158 | ~180 |
 | `ui/` | the registry, the flat spec, the patches, the tree | 407 | ~800 |
@@ -281,6 +293,7 @@ Resident memory O(window + context + one result), by law.
 | a graph runtime | the laws are checked by substitution on a pure function |
 | telemetry | a journal that replays is worth more than a metric that aggregates |
 | callable peer handles | a peer acts on decisions it cannot see; the cost is measured |
+| a wire standard for the world | the exchange is an interface between two instances of this harness; adapters come when interop is needed ([ADR 0020](./adr/0020-embeddable-first.md) D107) |
 
 ---
 

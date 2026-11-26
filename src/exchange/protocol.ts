@@ -14,6 +14,11 @@
  * Two id spaces. A **task** is one unit of delegated work and is identified by
  * `taskId`. The frames of one task belong to one task and nothing else.
  *
+ * This exchange is an interface between two instances of this harness, on links
+ * their owner controls (ADR 0020 D107) — an in-house transport, not a standard.
+ * The transport authenticates nobody: run it on trusted channels — localhost, a
+ * LAN, a VPN — until an auth layer exists (ADR 0020 D108).
+ *
  * One vocabulary (ADR 0008 D45): the `event` frame carries a **journal entry** —
  * the run's own log — and not a live event. A delegated task is then a fact in a
  * log, and not a fact in a frame (ADR 0008 D49).

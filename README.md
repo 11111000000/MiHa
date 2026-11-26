@@ -30,14 +30,15 @@ Measured, for the browser target, minified and gzipped:
 
 | | gzip | Of the 30 KB ceiling |
 |---|---|---|
-| `@earendil-works/pi-agent-core` | **22 638 B** | 76 % |
-| MiHa's core | **8 102 B** | 27 % |
-| MiHa's core + the provider layer | **6 523 B** | 22 % |
+| `@earendil-works/pi-agent-core` | **22 638 B** | 75 % |
+| MiHa's core | **8 486 B** | 28 % |
+| MiHa's core + the provider layer | **10 079 B** | 34 % |
 
 Pi's core does not fit the ceiling: the layers MiHa still needs on top of it — the
 worker host, the peer exchange, the trace, the interface — would take it to about
-31 KB. And pi has no way for a backend agent to hand a task to a frontend agent and
-call back into the browser's tools, which is the core of this project's concept.
+31 KB. And pi's model has the peer reaching into the browser's tools — the boundary
+every protocol in the field refuses, and the one MiHa keeps
+([ADR 0007](docs/adr/0007-peer-boundary.md)).
 
 The full comparison, with what it costs us, is in
 [docs/research/04-build-vs-use.md](docs/research/04-build-vs-use.md).
@@ -65,10 +66,12 @@ qualities of the harness itself: **effective · reliable · small · frugal**.
 | `docs/adr/0008-final-architecture.md` | the decision that fixed the final architecture |
 | `docs/adr/0009-policy-defaults.md` | the three policy defaults: result 8 192 B, turns 32, window 64 |
 | `docs/adr/0010-context-policy.md` | the context policy: 128 KiB, and what does not fit is collapsed |
-| `docs/adr/0011-receiving-side.md` | the receiving side of the exchange: it runs the peer's task with its own tools |
+| `docs/adr/0011-receiving-side.md` | the optional peer: the receiving side runs the task with its own tools |
 | `docs/adr/0012-cassette.md` | the cassette: the provider's responses under the hash of the request |
 | `docs/adr/0017-tool-timeout-and-host-digest.md` | the tool timeout (120 s) and the host's better digest |
 | `docs/adr/0018-fieldwork.md` | the fieldwork: a live run against MiniMax, and the bundle measured in situ |
+| `docs/adr/0019-worker-placement.md` | where the journal lives when the harness runs in a worker |
+| `docs/adr/0020-embeddable-first.md` | the peer is an optional layer; the wire is an interface between two instances of this harness |
 | `docs/adr/0019-worker-placement.md` | where the journal lives when the harness runs in a worker |
 | `docs/adr/0004-quality-bar.md` | the quality bar and the budgets it is measured against |
 | `docs/adr/0003-core-scope.md` | how much of pi to take, and what "parity" means |

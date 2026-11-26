@@ -401,11 +401,13 @@
 </section>
 
 <section id="peer">
-  <h2><span class="no">05</span>A peer, not a handle</h2>
-  <p>The harness hands a task to a peer and takes it back. The peer runs the task with
-  <strong>its own</strong> tools and <strong>its own</strong> model, and what crosses
-  the wire is the task and the peer's journal — never a callable handle on anyone's
-  tools.</p>
+  <h2><span class="no">05</span>The optional peer</h2>
+  <p>A page cannot reach secrets, databases or heavy compute. When the agent needs
+  them, an optional peer layer hands a task to a backend instance of the same
+  harness: the peer runs it with <strong>its own</strong> tools and <strong>its
+  own</strong> model, and what crosses the wire is the task and the peer's journal —
+  a fact in a log, on both sides. The link belongs on trusted channels; it
+  authenticates nobody today.</p>
   <div class="diagram">
   <svg viewBox="0 0 920 320" role="img" aria-label="the exchange: offer, accept, the peer's journal, cancel, result">
     <defs>

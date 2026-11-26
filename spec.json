@@ -989,6 +989,32 @@
       "register": "fact",
       "control": "sed -i 's/Promise.resolve(host.summarize(collapsed, entry.summary))/Promise.resolve(entry.summary)/' src/core/loop.ts",
       "waiver": null
+    },
+    {
+      "id": "peer-optional",
+      "text": "The peer layer is optional and the core stands alone: no file under src/core imports from the exchange, and a run completes with no peer installed - the harness stands in the page by itself, and delegation is somebody else's addition",
+      "scope": [
+        "src/core/",
+        "test/peer-optional.test.ts"
+      ],
+      "source": {
+        "kind": "madr",
+        "path": "docs/adr/0020-embeddable-first.md",
+        "section": null,
+        "digest": "75382048ad9c02ff2f04d605e07016038e51b03ff29845b8b0d543ae3550c38c",
+        "review": null
+      },
+      "owner": "petr p.b.kosov@yandex.ru",
+      "requirements": [
+        {
+          "kind": "verifier",
+          "spec": "bun test test/peer-optional.test.ts"
+        }
+      ],
+      "falsifier": "a file under src/core importing from the exchange, or a run that needs a peer to complete",
+      "register": "fact",
+      "control": "printf 'import { delegate } from \"../exchange/index.ts\";\\n' >> src/core/run.ts",
+      "waiver": null
     }
   ]
 }
