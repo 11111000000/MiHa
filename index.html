@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MiHa — a browser-first agent harness</title>
+<meta name="description" content="A small agent harness that runs in a browser worker, calls the application's own tools, hands tasks to a peer, and stays inside 15 KB gzip.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='56' height='56' rx='14' fill='%23f7f4ee' stroke='%231c1e21' stroke-width='4'/%3E%3Crect x='16' y='17' width='32' height='7' rx='3.5' fill='%239a3412'/%3E%3Crect x='16' y='29' width='24' height='7' rx='3.5' fill='%231c1e21'/%3E%3Crect x='16' y='41' width='16' height='7' rx='3.5' fill='%236b6f76'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --paper: #f7f4ee;
+    --card: #fffdf9;
+    --ink: #1c1e21;
+    --muted: #6b6f76;
+    --line: #e4ded2;
+    --accent: #9a3412;
+    --accent-soft: #fbe9dd;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font: 17px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, .mono { font-family: var(--mono); font-size: 0.86em; }
+  pre { font-family: var(--mono); font-size: 13.5px; line-height: 1.6; }
+  h1, h2, h3 { font-family: var(--mono); letter-spacing: -0.02em; }
+  h2 { font-size: 21px; margin: 0 0 18px; padding-top: 8px; }
+  h2 .no { color: var(--accent); margin-right: 10px; }
+  section { border-top: 1px solid var(--line); margin-top: 56px; padding-top: 34px; }
+  p + p { margin-top: 14px; }
+  .muted { color: var(--muted); }
+  .accent { color: var(--accent); }
+
+  /* header + logo */
+  header { padding: 46px 0 40px; }
+  .brandrow { display: flex; align-items: center; gap: 20px; }
+  .brandrow svg { width: 72px; height: 72px; flex: none; }
+  .brand { font-family: var(--mono); font-size: 46px; font-weight: 700; letter-spacing: -0.03em; }
+  .brand em { color: var(--accent); font-style: normal; }
+  .tagline { font-size: 20px; margin-top: 12px; max-width: 660px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+  .badge {
+    background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+    font-family: var(--mono); font-size: 12.5px; padding: 5px 12px;
+  }
+  .badge b { color: var(--accent); font-weight: 600; }
+  .qualities { display: flex; gap: 26px; margin-top: 22px; font-family: var(--mono); font-size: 13px; }
+  .qualities span::before { content: "· "; color: var(--accent); }
+
+  /* measured */
+  .bar { background: var(--line); border-radius: 5px; height: 14px; margin: 10px 0 6px; overflow: hidden; }
+  .bar i { background: var(--accent); display: block; height: 100%; }
+  .bar-label { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 12.5px; }
+  .grid2 { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; margin-top: 20px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px 18px; }
+  .stat b { font-family: var(--mono); font-size: 22px; }
+  .stat .muted { font-size: 13.5px; }
+
+  /* diagrams */
+  .diagram {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    margin: 20px 0 8px; padding: 16px 14px 10px;
+  }
+  .diagram svg { display: block; height: auto; width: 100%; }
+  .diagram .cap {
+    color: var(--muted); font-family: var(--mono); font-size: 12.5px;
+    margin-top: 8px; text-align: center;
+  }
+  svg text { font-family: var(--mono); }
+  .d-title { font-size: 13px; font-weight: 700; fill: var(--ink); letter-spacing: 0.08em; }
+  .d-sub { font-size: 11.5px; fill: var(--muted); }
+  .d-chip { fill: var(--paper); stroke: var(--line); }
+  .d-chiptext { font-size: 11px; fill: var(--ink); }
+  .d-box { fill: var(--card); stroke: #1c1e21; stroke-width: 1.5; }
+  .d-line { stroke: #6b6f76; stroke-width: 1.4; fill: none; }
+  .d-label { font-size: 11px; fill: var(--muted); }
+  .d-dash { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 5 5; }
+
+  /* steps */
+  ol.steps { counter-reset: s; list-style: none; margin-top: 6px; }
+  ol.steps li { counter-increment: s; margin: 12px 0; padding-left: 44px; position: relative; }
+  ol.steps li::before {
+    background: var(--accent-soft); border-radius: 50%; color: var(--accent);
+    content: counter(s); font-family: var(--mono); font-size: 13px; font-weight: 600;
+    height: 28px; left: 0; line-height: 28px; position: absolute; text-align: center; width: 28px;
+  }
+
+  /* code */
+  pre.code {
+    background: #21242a; border-radius: 8px; color: #e8e6e1;
+    margin: 18px 0; overflow-x: auto; padding: 18px 22px;
+  }
+  pre.code .k { color: #f0a97e; }
+  pre.code .s { color: #a7d0a0; }
+  pre.code .c { color: #7d8490; }
+
+  /* example */
+  .example-card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-top: 18px; padding: 22px; }
+  .example-card .muted { font-size: 15px; }
+  .cta {
+    background: var(--accent); border-radius: 7px; color: #fff; display: inline-block;
+    font-family: var(--mono); font-size: 14px; margin-top: 14px; padding: 9px 18px;
+  }
+  .cta:hover { text-decoration: none; filter: brightness(1.08); }
+
+  /* refusals */
+  ul.refusals { list-style: none; margin-top: 6px; }
+  ul.refusals li { margin: 10px 0; padding-left: 26px; position: relative; }
+  ul.refusals li::before { color: var(--accent); content: "×"; font-family: var(--mono); font-weight: 700; left: 0; position: absolute; }
+
+  /* footer */
+  footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; margin-top: 64px; padding: 28px 0 64px; }
+  footer .mono { font-size: 13px; }
+
+  @media (max-width: 640px) {
+    .grid2 { grid-template-columns: 1fr; }
+    .qualities { flex-direction: column; gap: 4px; }
+    .brand { font-size: 34px; }
+    .brandrow svg { width: 56px; height: 56px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brandrow">
+    <svg viewBox="0 0 64 64" role="img" aria-label="the MiHa mark">
+      <rect x="4" y="4" width="56" height="56" rx="14" fill="#fffdf9" stroke="#1c1e21" stroke-width="3"/>
+      <rect x="16" y="17" width="32" height="7" rx="3.5" fill="#9a3412"/>
+      <rect x="16" y="29" width="24" height="7" rx="3.5" fill="#1c1e21"/>
+      <rect x="16" y="41" width="16" height="7" rx="3.5" fill="#6b6f76"/>
+    </svg>
+    <div class="brand">MiHa</div>
+  </div>
+  <p class="tagline">A browser-first agent harness with an optional peer, written for embedding into any application.</p>
+  <div class="badges">
+    <span class="badge">the whole example <b>14 836 B</b> gzip</span>
+    <span class="badge">the ceiling <b>30 000 B</b></span>
+    <span class="badge"><b>437</b> tests</span>
+    <span class="badge"><b>36</b> claims, each with a negative control</span>
+    <span class="badge">runtime deps <b>0</b></span>
+  </div>
+  <div class="qualities">
+    <span>effective</span><span>reliable</span><span>small</span><span>frugal</span>
+  </div>
+</header>
+
+<section id="small">
+  <h2><span class="no">01</span>Small, and measured</h2>
+  <p>Agent frameworks tend to grow a runtime, a state store and a schema library
+  around the core. MiHa's budget is a law enforced by the build. The whole thing,
+  harness and provider adapter and peer exchange and interface layer, is measured on
+  every gate run. The build fails if it does not fit.</p>
+  <div class="bar"><i style="width: 49.5%"></i></div>
+  <div class="bar-label"><span>the browser example, in situ</span><span>14 836 / 30 000 B gzip</span></div>
+  <div class="grid2">
+    <div class="stat"><b>8 486 B</b><div class="muted">the core, gzipped — the journal, the projection, the state machine, the driver</div></div>
+    <div class="stat"><b>10 079 B</b><div class="muted">with the provider layer — an OpenAI-compatible adapter, measured against MiniMax-M3</div></div>
+    <div class="stat"><b>437 tests · 39 claims</b><div class="muted">every claim carries a falsifier and a negative control that provably breaks it</div></div>
+    <div class="stat"><b>0 dependencies</b><div class="muted">nothing from npm at runtime — the browser loads only what this repository wrote</div></div>
+  </div>
+</section>
+
+<section id="how">
+  <h2><span class="no">02</span>How it works</h2>
+  <p>An application embeds MiHa and gets an agent loop. The model decides. The harness
+  dispatches the tools the application registered, and the application's interface
+  renders what happened. Everything that happens lands in one <strong>journal</strong>:
+  an append-only log of durable events. The model's context, the trace, the session and
+  the peer's view of a delegated task all read from it.</p>
+
+  <div class="diagram">
+  <svg viewBox="0 0 920 550" role="img" aria-label="the host surface, the driver, the core, the journal and the projection">
+    <defs>
+      <marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0L10,5L0,10z" fill="#6b6f76"/>
+      </marker>
+    </defs>
+
+    <!-- THE HOST -->
+    <rect x="60" y="24" width="800" height="88" rx="10" class="d-box"/>
+    <text x="76" y="50" class="d-title">THE HOST — the application</text>
+    <rect x="76"  y="62" width="118" height="28" rx="6" class="d-chip"/>
+    <text x="135" y="80" text-anchor="middle" class="d-chiptext">callProvider</text>
+    <rect x="202" y="62" width="118" height="28" rx="6" class="d-chip"/>
+    <text x="261" y="80" text-anchor="middle" class="d-chiptext">tools</text>
+    <rect x="328" y="62" width="118" height="28" rx="6" class="d-chip"/>
+    <text x="387" y="80" text-anchor="middle" class="d-chiptext">approve()</text>
+    <rect x="454" y="62" width="118" height="28" rx="6" class="d-chip"/>
+    <text x="513" y="80" text-anchor="middle" class="d-chiptext">prepareRequest</text>
+    <rect x="580" y="62" width="118" height="28" rx="6" class="d-chip"/>
+    <text x="639" y="80" text-anchor="middle" class="d-chiptext">summarize()</text>
+    <rect x="706" y="62" width="118" height="28" rx="6" class="d-chip"/>
+    <text x="765" y="80" text-anchor="middle" class="d-chiptext">persist()</text>
+
+    <!-- THE PROVIDER -->
+    <rect x="16" y="170" width="160" height="72" rx="10" class="d-box"/>
+    <text x="32" y="196" class="d-title">THE PROVIDER</text>
+    <text x="32" y="216" class="d-sub">MiniMax-M3</text>
+
+    <!-- THE DRIVER -->
+    <rect x="250" y="170" width="420" height="72" rx="10" class="d-box"/>
+    <text x="266" y="196" class="d-title">THE DRIVER</text>
+    <text x="266" y="216" class="d-sub">performs the intents · races the cancellation</text>
+
+    <!-- THE PEER -->
+    <rect x="744" y="170" width="160" height="72" rx="10" class="d-box"/>
+    <text x="760" y="196" class="d-title">THE PEER</text>
+    <text x="760" y="216" class="d-sub">a task, never tools</text>
+
+    <!-- THE CORE -->
+    <rect x="250" y="300" width="420" height="72" rx="10" class="d-box"/>
+    <text x="266" y="326" class="d-title">THE CORE — pure</text>
+    <text x="266" y="346" class="d-sub">step(state, input) · validates · plans</text>
+    <text x="266" y="362" class="d-sub">the phase is derived, never stored</text>
+
+    <!-- THE JOURNAL -->
+    <rect x="100" y="430" width="320" height="92" rx="10" class="d-box"/>
+    <text x="116" y="456" class="d-title">THE JOURNAL</text>
+    <text x="116" y="476" class="d-sub">append-only · windowed</text>
+    <text x="116" y="496" class="d-sub">the trace · the session · the peer's view</text>
+
+    <!-- THE PROJECTION -->
+    <rect x="500" y="430" width="320" height="92" rx="10" class="d-box"/>
+    <text x="516" y="456" class="d-title">THE PROJECTION</text>
+    <text x="516" y="476" class="d-sub">the fold → the model's context</text>
+    <text x="516" y="496" class="d-sub">compaction is a fold</text>
+
+    <!-- the arrows -->
+    <line x1="400" y1="112" x2="400" y2="168" class="d-line" marker-end="url(#ah1)"/>
+    <text x="410" y="142" class="d-label">performs</text>
+    <line x1="540" y1="170" x2="540" y2="114" class="d-line" marker-end="url(#ah1)"/>
+    <text x="550" y="140" class="d-label">the events · the journal</text>
+
+    <line x1="176" y1="200" x2="246" y2="200" class="d-line" marker-end="url(#ah1)" marker-start="url(#ah1)"/>
+    <line x1="674" y1="200" x2="744" y2="200" class="d-line" marker-end="url(#ah1)" marker-start="url(#ah1)"/>
+    <text x="709" y="192" text-anchor="middle" class="d-label">a task</text>
+
+    <line x1="380" y1="242" x2="380" y2="298" class="d-line" marker-end="url(#ah1)"/>
+    <text x="390" y="275" class="d-label">intents</text>
+    <line x1="540" y1="300" x2="540" y2="244" class="d-line" marker-end="url(#ah1)"/>
+    <text x="550" y="275" class="d-label">the state · the outputs</text>
+
+    <line x1="330" y1="372" x2="330" y2="428" class="d-line" marker-end="url(#ah1)"/>
+    <text x="340" y="404" class="d-label">append</text>
+    <line x1="560" y1="430" x2="560" y2="374" class="d-line" marker-end="url(#ah1)"/>
+    <text x="570" y="404" class="d-label">the context</text>
+    <line x1="420" y1="476" x2="498" y2="476" class="d-line" marker-end="url(#ah1)"/>
+    <text x="459" y="468" text-anchor="middle" class="d-label">fold</text>
+  </svg>
+  <div class="cap">the layers: the host owns everything privileged, the driver performs, the core decides, the journal remembers</div>
+  </div>
+
+  <div class="diagram">
+  <svg viewBox="0 0 920 330" role="img" aria-label="a compaction: the collapsed range becomes a digest, and the journal keeps the whole history">
+    <defs>
+      <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0L10,5L0,10z" fill="#9a3412"/>
+      </marker>
+    </defs>
+
+    <!-- the journal, before -->
+    <text x="80" y="28" class="d-title">THE JOURNAL — the whole history</text>
+    <g font-size="11">
+      <rect x="80"  y="40"  width="220" height="26" rx="6" fill="var(--paper)" stroke="#c9c2b4"/>
+      <text x="92"  y="57"  fill="#1c1e21">1 · user — “read notes.txt”</text>
+      <rect x="80"  y="72"  width="220" height="26" rx="6" fill="var(--paper)" stroke="#c9c2b4"/>
+      <text x="92"  y="89"  fill="#1c1e21">2 · assistant — thinking…</text>
+      <rect x="80"  y="104" width="220" height="26" rx="6" fill="var(--paper)" stroke="#c9c2b4"/>
+      <text x="92"  y="121" fill="#1c1e21">3 · tool_call — echo</text>
+      <rect x="80"  y="136" width="220" height="26" rx="6" fill="var(--paper)" stroke="#c9c2b4"/>
+      <text x="92"  y="153" fill="#1c1e21">4 · tool_result — “hello”</text>
+      <rect x="80"  y="168" width="220" height="26" rx="6" fill="var(--paper)" stroke="#c9c2b4"/>
+      <text x="92"  y="185" fill="#1c1e21">5 · assistant — “it says hello”</text>
+      <rect x="80"  y="200" width="220" height="26" rx="6" fill="var(--paper)" stroke="#c9c2b4"/>
+      <text x="92"  y="217" fill="#1c1e21">6 · tool_call — echo</text>
+      <rect x="80"  y="232" width="220" height="26" rx="6" fill="var(--paper)" stroke="#c9c2b4"/>
+      <text x="92"  y="249" fill="#1c1e21">7 · tool_result — “hello”</text>
+      <rect x="80"  y="264" width="220" height="26" rx="6" fill="var(--paper)" stroke="#c9c2b4"/>
+      <text x="92"  y="281" fill="#1c1e21">8 · assistant — “done”</text>
+    </g>
+
+    <!-- the fold -->
+    <line x1="330" y1="150" x2="470" y2="150" stroke="#9a3412" stroke-width="1.6" marker-end="url(#ah2)"/>
+    <text x="400" y="138" text-anchor="middle" class="d-label" fill="#9a3412">the fold</text>
+    <text x="400" y="170" text-anchor="middle" class="d-label">over the budget</text>
+
+    <!-- the model's context, after -->
+    <text x="520" y="28" class="d-title">WHAT THE MODEL SEES</text>
+    <rect x="520" y="40" width="300" height="34" rx="7" fill="#9a3412"/>
+    <text x="536" y="62" fill="#fff" font-size="11.5">[compacted] 5 entries collapsed: user: …</text>
+    <rect x="520" y="104" width="300" height="26" rx="6" fill="var(--paper)" stroke="#c9c2b4"/>
+    <text x="532" y="121" fill="#1c1e21" font-size="11">6 · tool_call — echo</text>
+    <rect x="520" y="136" width="300" height="26" rx="6" fill="var(--paper)" stroke="#c9c2b4"/>
+    <text x="532" y="153" fill="#1c1e21" font-size="11">7 · tool_result — “hello”</text>
+    <rect x="520" y="168" width="300" height="26" rx="6" fill="var(--paper)" stroke="#c9c2b4"/>
+    <text x="532" y="185" fill="#1c1e21" font-size="11">8 · assistant — “done”</text>
+    <line x1="500" y1="94" x2="850" y2="94" class="d-dash"/>
+    <text x="848" y="94" text-anchor="end" class="d-label">the budget</text>
+
+    <text x="520" y="230" class="d-sub">the journal keeps the whole history —</text>
+    <text x="520" y="248" class="d-sub">the fold only changes what the model sees</text>
+  </svg>
+  <div class="cap">a compaction: the range that does not fit becomes a digest, and the answers it took with it go too</div>
+  </div>
+</section>
+
+<section id="laws">
+  <h2><span class="no">03</span>The laws</h2>
+  <p>Every law states the protocol fact it derives from, and carries a negative
+  control — a mutation that provably breaks it. A claim is settled only after a
+  discriminator agent has tried to break it.</p>
+  <table>
+    <tr><th>Law</th><th>Statement</th></tr>
+    <tr><td>M1</td><td>every tool call receives exactly one answer — on refusal, failure, truncation, provider error, cancellation</td></tr>
+    <tr><td>M2</td><td>a call whose arguments did not arrive complete is never executed</td></tr>
+    <tr><td>M3</td><td>a failed tool is a result carrying <code>isError</code>, which the model reads and recovers from</td></tr>
+    <tr><td>M4</td><td>a provider failure is an event, and M1 survives it</td></tr>
+    <tr><td>R1</td><td>resident memory is O(window + context + one result), independent of run length</td></tr>
+    <tr><td>T1</td><td>an exclusive tool runs alone; shared tools around it still run together</td></tr>
+    <tr><td>T4</td><td>results are recorded in the order the assistant asked for them</td></tr>
+    <tr><td>replay</td><td>the same journal, replayed, produces the same context: <code>fold(replay(log)) ≡ fold(log)</code></td></tr>
+  </table>
+</section>
+
+<section id="run">
+  <h2><span class="no">04</span>A run, end to end</h2>
+  <div class="diagram">
+  <svg viewBox="0 0 920 540" role="img" aria-label="a sequence: the page, the harness in its worker, and the provider">
+    <defs>
+      <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0L10,5L0,10z" fill="#6b6f76"/>
+      </marker>
+    </defs>
+
+    <!-- the lifelines -->
+    <line x1="150" y1="64" x2="150" y2="510" stroke="#c9c2b4" stroke-dasharray="4 5"/>
+    <line x1="460" y1="64" x2="460" y2="510" stroke="#c9c2b4" stroke-dasharray="4 5"/>
+    <line x1="770" y1="64" x2="770" y2="510" stroke="#c9c2b4" stroke-dasharray="4 5"/>
+
+    <!-- the headers -->
+    <rect x="65" y="24" width="170" height="40" rx="8" class="d-box"/>
+    <text x="150" y="49" text-anchor="middle" class="d-title">THE PAGE</text>
+    <rect x="375" y="24" width="170" height="40" rx="8" class="d-box"/>
+    <text x="460" y="49" text-anchor="middle" class="d-title">THE HARNESS</text>
+    <rect x="685" y="24" width="170" height="40" rx="8" class="d-box"/>
+    <text x="770" y="49" text-anchor="middle" class="d-title">MINIMAX-M3</text>
+
+    <!-- the activations -->
+    <rect x="144" y="88" width="12" height="344" rx="3" fill="#e4ded2"/>
+    <rect x="454" y="88" width="12" height="420" rx="3" fill="#e4ded2"/>
+    <rect x="764" y="128" width="12" height="60" rx="3" fill="#e4ded2"/>
+    <rect x="764" y="328" width="12" height="60" rx="3" fill="#e4ded2"/>
+
+    <!-- the messages -->
+    <line x1="156" y1="96" x2="452" y2="96" class="d-line" marker-end="url(#ah3)"/>
+    <text x="304" y="88" text-anchor="middle" class="d-label">run(“read notes.txt”)</text>
+
+    <line x1="466" y1="136" x2="762" y2="136" class="d-line" marker-end="url(#ah3)"/>
+    <text x="614" y="128" text-anchor="middle" class="d-label">the request — through prepareRequest()</text>
+
+    <line x1="762" y1="176" x2="468" y2="176" class="d-line" stroke-dasharray="5 4" marker-end="url(#ah3)"/>
+    <text x="614" y="168" text-anchor="middle" class="d-label">the stream: thinking, then a tool call</text>
+
+    <line x1="454" y1="216" x2="158" y2="216" class="d-line" marker-end="url(#ah3)"/>
+    <text x="304" y="208" text-anchor="middle" class="d-label">approve? — the human allows</text>
+
+    <line x1="454" y1="256" x2="158" y2="256" class="d-line" marker-end="url(#ah3)"/>
+    <text x="304" y="248" text-anchor="middle" class="d-label">call: echo — through the capability bridge</text>
+
+    <line x1="156" y1="296" x2="452" y2="296" class="d-line" stroke-dasharray="5 4" marker-end="url(#ah3)"/>
+    <text x="304" y="288" text-anchor="middle" class="d-label">the answer</text>
+
+    <line x1="466" y1="336" x2="762" y2="336" class="d-line" marker-end="url(#ah3)"/>
+    <text x="614" y="328" text-anchor="middle" class="d-label">the next request — the journal folded forward</text>
+
+    <line x1="762" y1="376" x2="468" y2="376" class="d-line" stroke-dasharray="5 4" marker-end="url(#ah3)"/>
+    <text x="614" y="368" text-anchor="middle" class="d-label">the final answer</text>
+
+    <line x1="454" y1="416" x2="158" y2="416" class="d-line" marker-end="url(#ah3)"/>
+    <text x="304" y="408" text-anchor="middle" class="d-label">the journal + the outcome: completed</text>
+
+    <!-- the journal ticks on the harness lifeline -->
+    <g font-size="10.5" fill="#9a3412">
+      <text x="480" y="188">journal: message</text>
+      <text x="480" y="232">journal: tool_call</text>
+      <text x="480" y="276">journal: tool_result</text>
+      <text x="480" y="392">journal: message</text>
+    </g>
+  </svg>
+  <div class="cap">one run: the live view and the journal, against a real provider — every arrow above happened in the fieldwork</div>
+  </div>
+</section>
+
+<section id="peer">
+  <h2><span class="no">05</span>The optional peer</h2>
+  <p>A page cannot reach secrets, databases or heavy compute. When the agent needs
+  them, an optional peer layer hands a task to a backend instance of the same
+  harness: the peer runs it with <strong>its own</strong> tools and <strong>its
+  own</strong> model, and what crosses the wire is the task and the peer's journal —
+  a fact in a log, on both sides. The link belongs on trusted channels; it
+  authenticates nobody today.</p>
+  <div class="diagram">
+  <svg viewBox="0 0 920 320" role="img" aria-label="the exchange: offer, accept, the peer's journal, cancel, result">
+    <defs>
+      <marker id="ah4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0L10,5L0,10z" fill="#6b6f76"/>
+      </marker>
+    </defs>
+
+    <rect x="40" y="64" width="280" height="196" rx="10" class="d-box"/>
+    <text x="56" y="92" class="d-title">THE FRONTEND</text>
+    <text x="56" y="114" class="d-sub">the interface · the tools · the human</text>
+    <rect x="600" y="64" width="280" height="196" rx="10" class="d-box"/>
+    <text x="616" y="92" class="d-title">THE PEER</text>
+    <text x="616" y="114" class="d-sub">its own tools · its own model</text>
+
+    <line x1="320" y1="112" x2="600" y2="112" class="d-line" marker-end="url(#ah4)"/>
+    <text x="460" y="104" text-anchor="middle" class="d-label">offer(version, taskId, task, context)</text>
+    <line x1="600" y1="150" x2="322" y2="150" class="d-line" marker-end="url(#ah4)"/>
+    <text x="460" y="142" text-anchor="middle" class="d-label">accept — or refuse, with a reason</text>
+    <line x1="600" y1="188" x2="322" y2="188" class="d-line" marker-end="url(#ah4)"/>
+    <text x="460" y="180" text-anchor="middle" class="d-label">event* — the peer's journal</text>
+    <line x1="320" y1="226" x2="600" y2="226" class="d-line" marker-end="url(#ah4)"/>
+    <text x="460" y="218" text-anchor="middle" class="d-label">cancel</text>
+    <line x1="600" y1="252" x2="322" y2="252" class="d-line" marker-end="url(#ah4)"/>
+    <text x="460" y="244" text-anchor="middle" class="d-label">result — the peer's own outcome, verbatim</text>
+
+    <text x="460" y="290" text-anchor="middle" class="d-sub">a task, never a callable handle on the tools — what crosses is data (ADR 0007)</text>
+  </svg>
+  <div class="cap">the exchange: symmetric, and deliberately narrow</div>
+  </div>
+</section>
+
+<section id="start">
+  <h2><span class="no">06</span>Embedding it</h2>
+  <pre class="code"><span class="c">// the host owns everything privileged: the model, the tools, the policy</span>
+<span class="k">import</span> { runAgent, userMessage } <span class="k">from</span> <span class="s">"miha/core"</span>;
+<span class="k">import</span> { openaiCompat } <span class="k">from</span> <span class="s">"miha/llm"</span>;
+
+<span class="k">const</span> host = {
+  callProvider: openaiCompat({ baseUrl: <span class="s">"https://api.minimax.io/v1"</span>, apiKey }),
+  append: (entry) =&gt; save(entry),                    <span class="c">// the journal is yours to keep</span>
+  approve: async (call) =&gt; askTheHuman(call),         <span class="c">// the one permission seam</span>
+  prepareRequest: (request) =&gt; shape(request),       <span class="c">// optional, in flight</span>
+  summarize: async (collapsed) =&gt; askMyModel(collapsed),
+};
+
+<span class="k">const</span> run = runAgent(config, host, { message: userMessage(<span class="s">"read notes.txt"</span>) });
+<span class="k">for await</span> (<span class="k">const</span> event <span class="k">of</span> run) render(event);       <span class="c">// the live view</span>
+<span class="k">const</span> outcome = <span class="k">await</span> run.result();                  <span class="c">// completed | cancelled | failed | limitReached</span></pre>
+  <p class="muted">That is the whole embedding surface. The budgets, the pairing and the
+  journal's shape are laws of the harness. Your configuration picks the provider, the
+  tools and the deadlines.</p>
+</section>
+
+<section id="example">
+  <h2><span class="no">07</span>Try it</h2>
+  <div class="example-card">
+    <p>The example embeds the harness in a worker, offers the page's own tools,
+    and asks <strong>you</strong> before every call. It needs your own MiniMax key —
+    the key stays in the page and in the worker, is never written to a file and is
+    never bundled. The whole example, measured in situ: <b class="mono">14 836 B gzip</b>.</p>
+    <a class="cta" href="./example/">open the live example →</a>
+  </div>
+</section>
+
+<section id="refuses">
+  <h2><span class="no">08</span>What it refuses to be</h2>
+  <p>The refusal list is part of the design. Each item below was considered, measured
+  or prototyped, and refused with the reason written down.</p>
+  <ul class="refusals">
+    <li><b>a model catalogue</b> — the host owns the model</li>
+    <li><b>a permission engine</b> — the host owns the policy; the core carries one async hook to it</li>
+    <li><b>a session store</b> — the host owns it; the core appends by intent</li>
+    <li><b>progressive tool disclosure</b> — the preregistered test found the hypothesis did not survive, and a moving tool list breaks the prompt cache</li>
+    <li><b>programmatic tool calling</b> — a code tool over page-local actions is arbitrary script in the user's page</li>
+    <li><b>a graph runtime</b> — the laws are checked by substitution on a pure function</li>
+    <li><b>telemetry</b> — a journal that replays is worth more than a metric that aggregates</li>
+    <li><b>callable peer handles</b> — a peer gets a task, never a handle on your tools</li>
+  </ul>
+</section>
+
+<section id="docs">
+  <h2><span class="no">09</span>The record</h2>
+  <p>Every decision is written down, numbered, and carried by evidence: nineteen
+  ADRs, five research notes, a method document, and a specification file that a tool
+  checks on every commit.</p>
+  <div class="grid2">
+    <div class="stat"><a href="https://github.com/11111000000/MiHa/tree/docs/stage-1-architecture/docs/architecture.md"><b>docs/architecture.md</b></a><div class="muted">the whole design: the five parts, a run end to end, the laws, the budgets</div></div>
+    <div class="stat"><a href="https://github.com/11111000000/MiHa/tree/docs/stage-1-architecture/docs/adr"><b>docs/adr/</b></a><div class="muted">nineteen decisions, from the core architecture to the fieldwork</div></div>
+    <div class="stat"><a href="https://github.com/11111000000/MiHa/tree/docs/stage-1-architecture/docs/method.md"><b>docs/method.md</b></a><div class="muted">how this repository is developed: the claim → code → proof → commit loop</div></div>
+    <div class="stat"><a href="https://github.com/11111000000/MiHa/tree/docs/research"><b>docs/research/</b></a><div class="muted">what was read and measured: reference harnesses, browser isolation, alternatives</div></div>
+  </div>
+</section>
+
+<footer>
+  <div>MIT · <a class="mono" href="https://github.com/11111000000/MiHa">github.com/11111000000/MiHa</a></div>
+  <div class="mono" style="margin-top:6px">the numbers on this page come from the build. <span class="mono">scripts/check-budget.mjs</span> and <span class="mono">mathc run</span> decide.</div>
+</footer>
+
+</div>
+</body>
+</html>
