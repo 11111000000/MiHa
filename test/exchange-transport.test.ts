@@ -167,7 +167,7 @@ describe("the peer's transport over a WebSocket", () => {
 	test("a frame that is sent arrives once and in order", async () => {
 		const peers = await peer();
 		const received: unknown[] = [];
-		peers.server.onMessage((message) => received.push(message));
+		peers.server.onMessage((message: unknown) => received.push(message));
 
 		peers.client.post(offer("t1", "first"));
 		peers.client.post(offer("t2", "second"));
@@ -181,8 +181,8 @@ describe("the peer's transport over a WebSocket", () => {
 		const peers = await peer();
 		const first: unknown[] = [];
 		const second: unknown[] = [];
-		peers.server.onMessage((message) => first.push(message));
-		peers.server.onMessage((message) => second.push(message));
+		peers.server.onMessage((message: unknown) => first.push(message));
+		peers.server.onMessage((message: unknown) => second.push(message));
 
 		peers.client.post(offer("t1", "only"));
 
@@ -196,8 +196,8 @@ describe("the peer's transport over a WebSocket", () => {
 		const other = await peer();
 		const mine: unknown[] = [];
 		const theirs: unknown[] = [];
-		peers.server.onMessage((message) => mine.push(message));
-		other.server.onMessage((message) => theirs.push(message));
+		peers.server.onMessage((message: unknown) => mine.push(message));
+		other.server.onMessage((message: unknown) => theirs.push(message));
 
 		peers.client.post(offer("t1", "mine"));
 
@@ -208,7 +208,7 @@ describe("the peer's transport over a WebSocket", () => {
 	test("the frames travel unchanged", async () => {
 		const peers = await peer();
 		const received: unknown[] = [];
-		peers.server.onMessage((message) => received.push(message));
+		peers.server.onMessage((message: unknown) => received.push(message));
 
 		const frame: ExchangeFrame = { kind: "event", taskId: "t1", event: entry };
 
@@ -222,7 +222,7 @@ describe("the peer's transport over a WebSocket", () => {
 	test("the backend end is the same port", async () => {
 		const peers = await peer();
 		const received: unknown[] = [];
-		peers.client.onMessage((message) => received.push(message));
+		peers.client.onMessage((message: unknown) => received.push(message));
 
 		peers.server.post(offer("t1", "from the backend"));
 
@@ -267,7 +267,7 @@ describe("the peer's transport over a WebSocket", () => {
 	test("a frame that cannot be sent is reported rather than thrown", () => {
 		const failures: TransportFailure[] = [];
 		const port = createWebSocketPort(brokenSocket());
-		port.onFailure((failure) => failures.push(failure));
+		port.onFailure((failure: TransportFailure) => failures.push(failure));
 
 		expect(() => port.post(offer("t1", "doomed"))).not.toThrow();
 
@@ -279,7 +279,7 @@ describe("the peer's transport over a WebSocket", () => {
 	test("a socket that is not open reports the frame instead of losing it", () => {
 		const failures: TransportFailure[] = [];
 		const port = createWebSocketPort(closedSocket());
-		port.onFailure((failure) => failures.push(failure));
+		port.onFailure((failure: TransportFailure) => failures.push(failure));
 
 		port.post(offer("t1", "doomed"));
 
@@ -291,7 +291,7 @@ describe("the peer's transport over a WebSocket", () => {
 		const sent: string[] = [];
 		const failures: TransportFailure[] = [];
 		const port = createWebSocketPort(recordingSocket(sent));
-		port.onFailure((failure) => failures.push(failure));
+		port.onFailure((failure: TransportFailure) => failures.push(failure));
 
 		port.close();
 		port.post(offer("t1", "after the end"));
@@ -303,7 +303,7 @@ describe("the peer's transport over a WebSocket", () => {
 	test("and delivers nothing more", async () => {
 		const peers = await peer();
 		const received: unknown[] = [];
-		peers.client.onMessage((message) => received.push(message));
+		peers.client.onMessage((message: unknown) => received.push(message));
 
 		peers.client.close();
 		peers.client.receive(JSON.stringify(offer("t1", "late")));
@@ -316,7 +316,7 @@ describe("the peer's transport over a WebSocket", () => {
 		const received: unknown[] = [];
 
 		peers.client.close();
-		peers.client.onMessage((message) => received.push(message));
+		peers.client.onMessage((message: unknown) => received.push(message));
 		peers.client.receive(JSON.stringify(offer("t1", "later")));
 
 		expect(received).toEqual([]);
@@ -365,7 +365,7 @@ describe("the port's own edges", () => {
 			close: () => {},
 			readyState: 1,
 		});
-		port.onFailure?.((failure) => failures.push(failure));
+		port.onFailure?.((failure: TransportFailure) => failures.push(failure));
 		const cyclic: Record<string, unknown> = {};
 		cyclic["self"] = cyclic;
 
@@ -380,7 +380,7 @@ describe("the port's own edges", () => {
 			close: () => {},
 			readyState: 1,
 		});
-		port.onMessage((message) => received.push(message));
+		port.onMessage((message: unknown) => received.push(message));
 
 		expect(() => port.receive("not json at all")).not.toThrow();
 		expect(received).toHaveLength(1);
@@ -409,7 +409,7 @@ describe("the port's own edges", () => {
 		port.onMessage(() => {
 			throw new Error("this listener is broken");
 		});
-		port.onMessage((message) => received.push(message));
+		port.onMessage((message: unknown) => received.push(message));
 
 		expect(() => port.receive('{"kind":"accept","taskId":"t1"}')).not.toThrow();
 		expect(received).toHaveLength(1);

@@ -167,11 +167,11 @@ run's journal entries back as they are written ([ADR 0011](./adr/0011-receiving-
 A peer gets a task, never a callable handle.
 
 The wire is MiHa's own task protocol — an interface between two instances of the
-same harness, for links their owner controls. It authenticates nobody today, so it
-belongs on trusted channels — localhost, a LAN, a VPN — until an auth layer exists
-([ADR 0020](./adr/0020-embeddable-first.md) D108). When interop with other agents
-matters, an adapter behind `ExchangePort` carries the same six frames; the boundary
-stays.
+same harness, for links their owner controls. Both ends hold a shared token: the
+handshake travels before any task frame, and a link that fails it is closed and
+reported ([ADR 0021](./adr/0021-peer-auth.md) D110–D112). Interception still wants
+`wss://`. When interop with other agents matters, an adapter behind `ExchangePort`
+carries the same six frames; the boundary stays.
 
 A **cassette** records the provider's responses under the hash of the request that
 asked for them, and replays a run without a network ([ADR 0012](./adr/0012-cassette.md)).

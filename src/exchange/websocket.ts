@@ -29,6 +29,26 @@
 
 import type { ExchangePort, TransportFailure } from "./protocol.ts";
 
+const encoder = new TextEncoder();
+
+/**
+ * Whether two tokens are equal, without an early exit on the first difference.
+ *
+ * A compare that bails out on the first differing byte lets a peer measure how
+ * much of the token it guessed — the link would leak its own secret through
+ * timing (ADR 0021 D112).
+ */
+export function sameToken(a: string, b: string): boolean {
+	const left = encoder.encode(a);
+	const right = encoder.encode(b);
+	let diff = left.length ^ right.length;
+	const n = Math.min(left.length, right.length);
+	for (let index = 0; index < n; index += 1) {
+		diff |= (left[index] ?? 0) ^ (right[index] ?? 0);
+	}
+	return diff === 0;
+}
+
 /** The socket's state when it can carry a frame. The WebSocket API's own number. */
 const OPEN = 1;
 
@@ -72,6 +92,23 @@ export interface WebSocketPort extends ExchangePort {
 	close(): void;
 }
 
+/** The shared secret of the link: both ends hold the same token (ADR 0021 D111). */
+export interface AuthOptions {
+	readonly token: string;
+}
+
+/**
+ * How a link authenticates (ADR 0021).
+ *
+ * - The port with a token opens with a handshake message — the shared token —
+ *   before anything the layer above sends.
+ * - Until the peer's handshake arrives, incoming frames are dropped, the link is
+ *   closed, and the failure is reported once.
+ * - A handshake with the wrong token closes the link and is reported.
+ * - The handshake never reaches the layer above: it carries the secret.
+ */
+export interface AuthenticatedOptions extends AuthOptions {}
+
 /**
  * The port over one socket.
  *
@@ -79,7 +116,7 @@ export interface WebSocketPort extends ExchangePort {
  * speaks to it: the frames are encoded once, in one place, and every listener
  * sees the same frame in the same order.
  */
-export function createWebSocketPort(socket: ExchangeSocket): WebSocketPort {
+export function createWebSocketPort(socket: ExchangeSocket, auth?: AuthOptions): WebSocketPort {
 	/** The listeners on the port: one channel, many listeners. */
 	const listeners: ((message: unknown) => void)[] = [];
 
@@ -88,6 +125,60 @@ export function createWebSocketPort(socket: ExchangeSocket): WebSocketPort {
 
 	/** Whether the port is still open. A closed port is closed for good. */
 	let open = true;
+
+	/**
+	 * Whether the link authenticated: the peer's handshake matched the token, and
+	 * the frames the layer above sends may cross. A link without a token carries
+	 * whatever both ends agreed to carry — trusted channels (ADR 0020 D108).
+	 */
+	let authenticated = auth === undefined;
+
+	/** The link's own handshake, sent once, before any frame of the task. */
+	let helloSent = auth === undefined;
+
+	const sendHello = (): void => {
+		if (helloSent || !open || socket.readyState !== OPEN) return;
+		helloSent = true;
+		const text = encode({ miha_auth: auth?.token ?? "" });
+		if (text !== undefined) {
+			try {
+				socket.send(text);
+			} catch {
+				// The handshake could not go: the first real frame will say so on
+				// the peer's side, and the failure channel hears about this one.
+				report({ error: new Error("the handshake could not be sent"), frame: undefined });
+			}
+		}
+	};
+
+	/**
+	 * Whether a decoded message is the peer's half of the handshake.
+	 *
+	 * The handshake is a transport message, not a protocol frame: it carries no
+	 * `kind`, and the layer above never sees it — it carries the secret.
+	 */
+	const isHandshake = (message: unknown): message is { miha_auth: string } =>
+		message !== null &&
+		typeof message === "object" &&
+		"miha_auth" in message &&
+		typeof (message as { miha_auth: unknown }).miha_auth === "string";
+
+	/** Consumes the peer's handshake. Says whether the link authenticated. */
+	const takeHandshake = (message: { miha_auth: string }): boolean =>
+		sameToken(message.miha_auth, auth?.token ?? "");
+
+	/** Closes the port and the socket under it. */
+	const closePort = (): void => {
+		if (!open) return;
+		open = false;
+		listeners.length = 0;
+		try {
+			socket.close();
+		} catch {
+			// A socket that cannot be closed is broken, and a broken socket is
+			// closed either way: the port is what the caller holds.
+		}
+	};
 
 	/** Tells the layer above that a frame did not go. */
 	const report = (failure: TransportFailure): void => {
@@ -107,6 +198,7 @@ export function createWebSocketPort(socket: ExchangeSocket): WebSocketPort {
 
 	return {
 		post(message: unknown): void {
+			sendHello();
 			if (!open) {
 				report({ error: new Error("the port is closed"), frame: message });
 				return;
@@ -141,6 +233,26 @@ export function createWebSocketPort(socket: ExchangeSocket): WebSocketPort {
 		receive(data: unknown): void {
 			if (!open) return;
 			const message = decode(data);
+			if (auth !== undefined) {
+				if (isHandshake(message)) {
+					// The peer's half of the handshake. It is consumed here, and it
+					// never reaches the layer above: the secret stays in the wire's
+					// one trip (ADR 0021 D110).
+					authenticated = takeHandshake(message);
+					if (!authenticated) {
+						report({ error: new Error("the link is not authenticated"), frame: message });
+						closePort();
+					}
+					return;
+				}
+				if (!authenticated) {
+					// A frame from a peer that never proved itself: dropped, the
+					// link closed, and the failure reported once (ADR 0021 D110).
+					report({ error: new Error("the link is not authenticated"), frame: message });
+					closePort();
+					return;
+				}
+			}
 			// The live list, like the worker's channel: a listener that closes the
 			// port empties the list, and the delivery stops there.
 			for (const listener of [...listeners]) {
@@ -155,18 +267,7 @@ export function createWebSocketPort(socket: ExchangeSocket): WebSocketPort {
 		},
 
 		close(): void {
-			if (!open) return;
-			open = false;
-			// The message listeners are gone: nothing is delivered any more. The
-			// failure handlers stay — a frame that cannot be sent after the end is
-			// still a frame the layer above did not hear about.
-			listeners.length = 0;
-			try {
-				socket.close();
-			} catch {
-				// A socket that cannot be closed is broken, and a broken socket is
-				// closed either way: the port is what the caller holds.
-			}
+			closePort();
 		},
 	};
 }
