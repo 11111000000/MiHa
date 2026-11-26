@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MiHa — a browser-first agent harness</title>
+<meta name="description" content="A small agent harness that runs in a browser worker, calls the application's own tools, hands tasks to a peer, and stays inside 15 KB gzip.">
+<style>
+  :root {
+    --paper: #f7f4ee;
+    --card: #fffdf9;
+    --ink: #1c1e21;
+    --muted: #6b6f76;
+    --line: #e4ded2;
+    --accent: #9a3412;
+    --accent-soft: #fbe9dd;
+    --good: #047857;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font: 17px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, .mono { font-family: var(--mono); font-size: 0.86em; }
+  pre { font-family: var(--mono); font-size: 13.5px; line-height: 1.6; }
+  h1, h2, h3 { font-family: var(--mono); letter-spacing: -0.02em; }
+  h2 { font-size: 21px; margin: 0 0 18px; padding-top: 8px; }
+  h2 .no { color: var(--accent); margin-right: 10px; }
+  section { border-top: 1px solid var(--line); margin-top: 56px; padding-top: 34px; }
+  p + p { margin-top: 14px; }
+  .muted { color: var(--muted); }
+  .accent { color: var(--accent); }
+
+  /* header */
+  header { padding: 56px 0 40px; }
+  .brand { font-family: var(--mono); font-size: 44px; font-weight: 700; letter-spacing: -0.03em; }
+  .brand em { color: var(--accent); font-style: normal; }
+  .tagline { font-size: 20px; margin-top: 10px; max-width: 640px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+  .badge {
+    background: var(--card); border: 1px solid var(--line); border-radius: 6px;
+    font-family: var(--mono); font-size: 12.5px; padding: 5px 12px;
+  }
+  .badge b { color: var(--accent); font-weight: 600; }
+  .qualities { display: flex; gap: 26px; margin-top: 22px; font-family: var(--mono); font-size: 13px; }
+  .qualities span::before { content: "· "; color: var(--accent); }
+
+  /* measured */
+  .bar { background: var(--line); border-radius: 5px; height: 14px; margin: 10px 0 6px; overflow: hidden; }
+  .bar i { background: var(--accent); display: block; height: 100%; }
+  .bar-label { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 12.5px; }
+  .grid2 { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; margin-top: 20px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px 18px; }
+  .stat b { font-family: var(--mono); font-size: 22px; }
+  .stat .muted { font-size: 13.5px; }
+
+  /* parts */
+  .parts { display: grid; gap: 12px; margin-top: 6px; }
+  .part { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; padding: 13px 18px; }
+  .part b { font-family: var(--mono); }
+  .part .muted { font-size: 15px; }
+
+  /* laws */
+  table { border-collapse: collapse; margin-top: 6px; width: 100%; }
+  th, td { border-bottom: 1px solid var(--line); padding: 9px 12px; text-align: left; vertical-align: top; }
+  th { font-family: var(--mono); font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  td:first-child { font-family: var(--mono); white-space: nowrap; }
+
+  /* steps */
+  ol.steps { counter-reset: s; list-style: none; margin-top: 6px; }
+  ol.steps li { counter-increment: s; margin: 12px 0; padding-left: 44px; position: relative; }
+  ol.steps li::before {
+    background: var(--accent-soft); border-radius: 50%; color: var(--accent);
+    content: counter(s); font-family: var(--mono); font-size: 13px; font-weight: 600;
+    height: 28px; left: 0; line-height: 28px; position: absolute; text-align: center; width: 28px;
+  }
+
+  /* code */
+  pre.code {
+    background: #21242a; border-radius: 8px; color: #e8e6e1;
+    margin: 18px 0; overflow-x: auto; padding: 18px 22px;
+  }
+  pre.code .k { color: #f0a97e; }
+  pre.code .s { color: #a7d0a0; }
+  pre.code .c { color: #7d8490; }
+
+  /* example */
+  .example-card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; margin-top: 18px; padding: 22px; }
+  .example-card .muted { font-size: 15px; }
+  .cta {
+    background: var(--accent); border-radius: 7px; color: #fff; display: inline-block;
+    font-family: var(--mono); font-size: 14px; margin-top: 14px; padding: 9px 18px;
+  }
+  .cta:hover { text-decoration: none; filter: brightness(1.08); }
+
+  /* refusals */
+  ul.refusals { list-style: none; margin-top: 6px; }
+  ul.refusals li { margin: 10px 0; padding-left: 26px; position: relative; }
+  ul.refusals li::before { color: var(--accent); content: "×"; font-family: var(--mono); font-weight: 700; left: 0; position: absolute; }
+
+  /* footer */
+  footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; margin-top: 64px; padding: 28px 0 64px; }
+  footer .mono { font-size: 13px; }
+
+  @media (max-width: 640px) {
+    .grid2 { grid-template-columns: 1fr; }
+    .qualities { flex-direction: column; gap: 4px; }
+    .brand { font-size: 34px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand">MiHa</div>
+  <p class="tagline">A browser-first agent harness with a symmetric peer, written for embedding into any application.</p>
+  <div class="badges">
+    <span class="badge">the whole example <b>14 836 B</b> gzip</span>
+    <span class="badge">the ceiling <b>30 000 B</b></span>
+    <span class="badge"><b>435</b> tests</span>
+    <span class="badge"><b>36</b> claims, each with a negative control</span>
+    <span class="badge">runtime deps <b>0</b></span>
+  </div>
+  <div class="qualities">
+    <span>effective</span><span>reliable</span><span>small</span><span>frugal</span>
+  </div>
+</header>
+
+<section id="small">
+  <h2><span class="no">01</span>Small, measured — not promised</h2>
+  <p>Most agent frameworks quote a "lightweight core" and then require a runtime, a
+  state store and a schema library. MiHa's budget is a law, enforced by the build:
+  the whole thing — harness, provider adapter, peer exchange, interface layer — is
+  measured every time the gate runs, and the build fails if it does not fit.</p>
+  <div class="bar"><i style="width: 49.5%"></i></div>
+  <div class="bar-label"><span>the browser example, in situ</span><span>14 836 / 30 000 B gzip</span></div>
+  <div class="grid2">
+    <div class="stat"><b>8 102 B</b><div class="muted">the core, gzipped — the journal, the projection, the state machine, the driver</div></div>
+    <div class="stat"><b>9 708 B</b><div class="muted">with the provider layer — an OpenAI-compatible adapter, measured against MiniMax-M3</div></div>
+    <div class="stat"><b>435 tests · 36 claims</b><div class="muted">every claim carries a falsifier and a negative control that provably breaks it</div></div>
+    <div class="stat"><b>0 dependencies</b><div class="muted">nothing from npm at runtime — the browser loads only what this repository wrote</div></div>
+  </div>
+</section>
+
+<section id="how">
+  <h2><span class="no">02</span>How it works</h2>
+  <p>An application embeds MiHa and gets an agent loop. The model decides; the harness
+  dispatches the tools the application registered; the application's interface renders
+  what happened. Everything that happens is one <strong>journal</strong> — an append-only
+  log of durable events — and everything reads from it: the model's context, the trace,
+  the session, and what a peer is handed.</p>
+  <div class="parts">
+    <div class="part"><b>the journal</b> — <span class="muted">one append-only log of durable events. The entries are the trace, the session and the peer's view of a delegated task — there is no second format.</span></div>
+    <div class="part"><b>the projection</b> — <span class="muted">the model's context, folded forward one entry at a time. Compaction is a fold, not a special case: what does not fit the budget is collapsed into a digest, and the journal keeps the whole history.</span></div>
+    <div class="part"><b>the core</b> — <span class="muted">a pure transition function. No I/O, no clock, no storage, no policy. It validates the arguments against its own dialect, plans the tool groups, and emits intents.</span></div>
+    <div class="part"><b>the driver</b> — <span class="muted">the only effectful part. It performs the intents: calls the provider through the host's request seam, asks the host's approval before each tool runs, races the cancellation, and feeds every result back.</span></div>
+    <div class="part"><b>the host surface</b> — <span class="muted">seven hooks, and nothing else: the provider, the tools, the approval, the request seam, the journal, the capabilities, the peer. The host owns everything privileged.</span></div>
+  </div>
+</section>
+
+<section id="laws">
+  <h2><span class="no">03</span>The laws</h2>
+  <p>Every law states the protocol fact it derives from, and carries a negative
+  control — a mutation that provably breaks it. A claim is settled only after a
+  discriminator agent has tried to break it.</p>
+  <table>
+    <tr><th>Law</th><th>Statement</th></tr>
+    <tr><td>M1</td><td>every tool call receives exactly one answer — on refusal, failure, truncation, provider error, cancellation</td></tr>
+    <tr><td>M2</td><td>a call whose arguments did not arrive complete is never executed</td></tr>
+    <tr><td>M3</td><td>a failed tool is a result carrying <code>isError</code>, which the model reads and recovers from</td></tr>
+    <tr><td>M4</td><td>a provider failure is an event, and M1 survives it</td></tr>
+    <tr><td>R1</td><td>resident memory is O(window + context + one result), independent of run length</td></tr>
+    <tr><td>T1</td><td>an exclusive tool runs alone; shared tools around it still run together</td></tr>
+    <tr><td>T4</td><td>results are recorded in the order the assistant asked for them</td></tr>
+    <tr><td>replay</td><td>the same journal, replayed, produces the same context: <code>fold(replay(log)) ≡ fold(log)</code></td></tr>
+  </table>
+</section>
+
+<section id="run">
+  <h2><span class="no">04</span>A run, end to end</h2>
+  <ol class="steps">
+    <li>the application asks the agent to do something</li>
+    <li>the request goes through the host's <code>prepareRequest</code> — elide a stale result, switch the model for a turn — and out to the provider</li>
+    <li>the model answers, and the run's journal grows: what the assistant said, what it asked for</li>
+    <li>the host's <code>approve</code> is asked before each tool runs — it may wait for a human</li>
+    <li>the tool runs with validated arguments, in the page, through the capability bridge</li>
+    <li>the result is budgeted, journalled and fed back — and the loop repeats until the model is done, the turn limit is reached, or someone cancels</li>
+  </ol>
+</section>
+
+<section id="start">
+  <h2><span class="no">05</span>Embedding it</h2>
+  <pre class="code"><span class="c">// the host owns everything privileged: the model, the tools, the policy</span>
+<span class="k">import</span> { runAgent, userMessage } <span class="k">from</span> <span class="s">"miha/core"</span>;
+<span class="k">import</span> { openaiCompat } <span class="k">from</span> <span class="s">"miha/llm"</span>;
+
+<span class="k">const</span> host = {
+  callProvider: openaiCompat({ baseUrl: <span class="s">"https://api.minimax.io/v1"</span>, apiKey }),
+  append: (entry) =&gt; save(entry),                    <span class="c">// the journal is yours to keep</span>
+  approve: async (call) =&gt; askTheHuman(call),         <span class="c">// the one permission seam</span>
+  prepareRequest: (request) =&gt; shape(request),       <span class="c">// optional, in flight</span>
+  summarize: async (collapsed) =&gt; askMyModel(collapsed),
+};
+
+<span class="k">const</span> run = runAgent(config, host, { message: userMessage(<span class="s">"read notes.txt"</span>) });
+<span class="k">for await</span> (<span class="k">const</span> event <span class="k">of</span> run) render(event);       <span class="c">// the live view</span>
+<span class="k">const</span> outcome = <span class="k">await</span> run.result();                  <span class="c">// completed | cancelled | failed | limitReached</span></pre>
+  <p class="muted">That is the whole embedding surface. The budgets, the pairing, the pairing's
+  survival and the journal's shape are the harness's laws — not your configuration.</p>
+</section>
+
+<section id="example">
+  <h2><span class="no">06</span>Try it</h2>
+  <div class="example-card">
+    <p>The example embeds the harness in a worker, offers the page's own tools,
+    and asks <strong>you</strong> before every call. It needs your own MiniMax key —
+    the key stays in the page and in the worker, is never written to a file and is
+    never bundled. The whole example, measured in situ: <b class="mono">14 836 B gzip</b>.</p>
+    <a class="cta" href="./example/">open the live example →</a>
+  </div>
+</section>
+
+<section id="refuses">
+  <h2><span class="no">07</span>What it refuses to be</h2>
+  <p>A harness is defined as much by what it will not carry. Each of these was
+  considered, measured or prototyped — and refused, with the reason written down.</p>
+  <ul class="refusals">
+    <li><b>a model catalogue</b> — the host owns the model</li>
+    <li><b>a permission engine</b> — the host owns the policy; the core carries one async hook to it</li>
+    <li><b>a session store</b> — the host owns it; the core appends by intent</li>
+    <li><b>progressive tool disclosure</b> — the preregistered test found the hypothesis did not survive, and a moving tool list breaks the prompt cache</li>
+    <li><b>programmatic tool calling</b> — a code tool over page-local actions is arbitrary script in the user's page</li>
+    <li><b>a graph runtime</b> — the laws are checked by substitution on a pure function</li>
+    <li><b>telemetry</b> — a journal that replays is worth more than a metric that aggregates</li>
+    <li><b>callable peer handles</b> — a peer gets a task, never a handle on your tools</li>
+  </ul>
+</section>
+
+<section id="docs">
+  <h2><span class="no">08</span>The record</h2>
+  <p>Every decision is written down, numbered, and carried by evidence: nineteen
+  ADRs, five research notes, a method document, and a specification file that a tool
+  checks on every commit.</p>
+  <div class="grid2">
+    <div class="stat"><a href="https://github.com/11111000000/MiHa/tree/docs/stage-1-architecture/docs/architecture.md"><b>docs/architecture.md</b></a><div class="muted">the whole design: the five parts, a run end to end, the laws, the budgets</div></div>
+    <div class="stat"><a href="https://github.com/11111000000/MiHa/tree/docs/stage-1-architecture/docs/adr"><b>docs/adr/</b></a><div class="muted">nineteen decisions, from the core architecture to the fieldwork</div></div>
+    <div class="stat"><a href="https://github.com/11111000000/MiHa/tree/docs/stage-1-architecture/docs/method.md"><b>docs/method.md</b></a><div class="muted">how this repository is developed: the claim → code → proof → commit loop</div></div>
+    <div class="stat"><a href="https://github.com/11111000000/MiHa/tree/docs/research"><b>docs/research/</b></a><div class="muted">what was read and measured: reference harnesses, browser isolation, alternatives</div></div>
+  </div>
+</section>
+
+<footer>
+  <div>MIT · <a class="mono" href="https://github.com/11111000000/MiHa">github.com/11111000000/MiHa</a></div>
+  <div class="mono" style="margin-top:6px">the numbers on this page are measured by the build, not typed in — <span class="mono">scripts/check-budget.mjs</span> and <span class="mono">mathc run</span> decide.</div>
+</footer>
+
+</div>
+</body>
+</html>
