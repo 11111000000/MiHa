@@ -140,11 +140,11 @@
     </svg>
     <div class="brand">MiHa</div>
   </div>
-  <p class="tagline">A browser-first agent harness with a symmetric peer, written for embedding into any application.</p>
+  <p class="tagline">A browser-first agent harness with an optional peer, written for embedding into any application.</p>
   <div class="badges">
     <span class="badge">the whole example <b>14 836 B</b> gzip</span>
     <span class="badge">the ceiling <b>30 000 B</b></span>
-    <span class="badge"><b>435</b> tests</span>
+    <span class="badge"><b>437</b> tests</span>
     <span class="badge"><b>36</b> claims, each with a negative control</span>
     <span class="badge">runtime deps <b>0</b></span>
   </div>
@@ -154,28 +154,28 @@
 </header>
 
 <section id="small">
-  <h2><span class="no">01</span>Small, measured — not promised</h2>
-  <p>Most agent frameworks quote a "lightweight core" and then require a runtime, a
-  state store and a schema library. MiHa's budget is a law, enforced by the build:
-  the whole thing — harness, provider adapter, peer exchange, interface layer — is
-  measured every time the gate runs, and the build fails if it does not fit.</p>
+  <h2><span class="no">01</span>Small, and measured</h2>
+  <p>Agent frameworks tend to grow a runtime, a state store and a schema library
+  around the core. MiHa's budget is a law enforced by the build. The whole thing,
+  harness and provider adapter and peer exchange and interface layer, is measured on
+  every gate run. The build fails if it does not fit.</p>
   <div class="bar"><i style="width: 49.5%"></i></div>
   <div class="bar-label"><span>the browser example, in situ</span><span>14 836 / 30 000 B gzip</span></div>
   <div class="grid2">
-    <div class="stat"><b>8 102 B</b><div class="muted">the core, gzipped — the journal, the projection, the state machine, the driver</div></div>
-    <div class="stat"><b>9 708 B</b><div class="muted">with the provider layer — an OpenAI-compatible adapter, measured against MiniMax-M3</div></div>
-    <div class="stat"><b>435 tests · 36 claims</b><div class="muted">every claim carries a falsifier and a negative control that provably breaks it</div></div>
+    <div class="stat"><b>8 486 B</b><div class="muted">the core, gzipped — the journal, the projection, the state machine, the driver</div></div>
+    <div class="stat"><b>10 079 B</b><div class="muted">with the provider layer — an OpenAI-compatible adapter, measured against MiniMax-M3</div></div>
+    <div class="stat"><b>437 tests · 39 claims</b><div class="muted">every claim carries a falsifier and a negative control that provably breaks it</div></div>
     <div class="stat"><b>0 dependencies</b><div class="muted">nothing from npm at runtime — the browser loads only what this repository wrote</div></div>
   </div>
 </section>
 
 <section id="how">
   <h2><span class="no">02</span>How it works</h2>
-  <p>An application embeds MiHa and gets an agent loop. The model decides; the harness
-  dispatches the tools the application registered; the application's interface renders
-  what happened. Everything that happens is one <strong>journal</strong> — an append-only
-  log of durable events — and everything reads from it: the model's context, the trace,
-  the session, and what a peer is handed.</p>
+  <p>An application embeds MiHa and gets an agent loop. The model decides. The harness
+  dispatches the tools the application registered, and the application's interface
+  renders what happened. Everything that happens lands in one <strong>journal</strong>:
+  an append-only log of durable events. The model's context, the trace, the session and
+  the peer's view of a delegated task all read from it.</p>
 
   <div class="diagram">
   <svg viewBox="0 0 920 550" role="img" aria-label="the host surface, the driver, the core, the journal and the projection">
@@ -457,8 +457,9 @@
 <span class="k">const</span> run = runAgent(config, host, { message: userMessage(<span class="s">"read notes.txt"</span>) });
 <span class="k">for await</span> (<span class="k">const</span> event <span class="k">of</span> run) render(event);       <span class="c">// the live view</span>
 <span class="k">const</span> outcome = <span class="k">await</span> run.result();                  <span class="c">// completed | cancelled | failed | limitReached</span></pre>
-  <p class="muted">That is the whole embedding surface. The budgets, the pairing, the pairing's
-  survival and the journal's shape are the harness's laws — not your configuration.</p>
+  <p class="muted">That is the whole embedding surface. The budgets, the pairing and the
+  journal's shape are laws of the harness. Your configuration picks the provider, the
+  tools and the deadlines.</p>
 </section>
 
 <section id="example">
@@ -474,8 +475,8 @@
 
 <section id="refuses">
   <h2><span class="no">08</span>What it refuses to be</h2>
-  <p>A harness is defined as much by what it will not carry. Each of these was
-  considered, measured or prototyped — and refused, with the reason written down.</p>
+  <p>The refusal list is part of the design. Each item below was considered, measured
+  or prototyped, and refused with the reason written down.</p>
   <ul class="refusals">
     <li><b>a model catalogue</b> — the host owns the model</li>
     <li><b>a permission engine</b> — the host owns the policy; the core carries one async hook to it</li>
@@ -503,7 +504,7 @@
 
 <footer>
   <div>MIT · <a class="mono" href="https://github.com/11111000000/MiHa">github.com/11111000000/MiHa</a></div>
-  <div class="mono" style="margin-top:6px">the numbers on this page are measured by the build, not typed in — <span class="mono">scripts/check-budget.mjs</span> and <span class="mono">mathc run</span> decide.</div>
+  <div class="mono" style="margin-top:6px">the numbers on this page come from the build. <span class="mono">scripts/check-budget.mjs</span> and <span class="mono">mathc run</span> decide.</div>
 </footer>
 
 </div>

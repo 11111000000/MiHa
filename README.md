@@ -34,10 +34,10 @@ Measured, for the browser target, minified and gzipped:
 | MiHa's core | **8 486 B** | 28 % |
 | MiHa's core + the provider layer | **10 079 B** | 34 % |
 
-Pi's core does not fit the ceiling: the layers MiHa still needs on top of it — the
-worker host, the peer exchange, the trace, the interface — would take it to about
-31 KB. And pi's model has the peer reaching into the browser's tools — the boundary
-every protocol in the field refuses, and the one MiHa keeps
+Pi's core does not fit the ceiling: the layers MiHa still needs on top of it (the
+worker host, the peer exchange, the trace, the interface) would take it to about
+31 KB. Pi's model also lets the peer reach into the browser's tools. MiHa keeps the
+boundary that A2A, MCP and AG-UI all draw
 ([ADR 0007](docs/adr/0007-peer-boundary.md)).
 
 The full comparison, with what it costs us, is in
