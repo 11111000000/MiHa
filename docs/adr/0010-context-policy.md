@@ -26,6 +26,12 @@ context is over the budget, it collapses the oldest range that does not fit into
 **digest** entry and keeps what follows. The journal keeps the whole history: a
 compaction is a fold, not a deletion.
 
+**Measured on our own tasks** (113 of them, against a real model:
+[research 06](../research/06-measurements.md)): the largest context was 8 KiB and no
+task needed a compaction — this budget never fired once either. It is a bound, and
+lowering it to the measured p90 × 4 would compact runs that need no compacting, and
+compaction is lossy.
+
 **Derivation.** A policy we chose, anchored to the measurement we have: the median real
 task runs 16.2 turns and 17.4 tool calls ([research 05](../research/05-alternative-architectures.md),
 arXiv:2509.24002), and a turn of our own conversation — a prompt, an assistant message

@@ -1,0 +1,135 @@
+[
+  {
+    "kind": "message",
+    "role": "user",
+    "content": "read notes.txt, list the directory, and tell me what the harness is",
+    "seq": 1,
+    "version": 1
+  },
+  {
+    "kind": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "I'll start by reading the notes and listing the directory."
+      }
+    ],
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "reasoning": 0
+    },
+    "stopReason": "toolUse",
+    "seq": 2,
+    "version": 1
+  },
+  {
+    "kind": "tool_call",
+    "callId": "call_function_7gnq1mel548i_1",
+    "name": "read_file",
+    "argumentsText": "{\"path\": \"notes.txt\"}",
+    "seq": 3,
+    "version": 1
+  },
+  {
+    "kind": "tool_call",
+    "callId": "call_function_7gnq1mel548i_2",
+    "name": "list_dir",
+    "argumentsText": "{}",
+    "seq": 4,
+    "version": 1
+  },
+  {
+    "kind": "tool_result",
+    "callId": "call_function_7gnq1mel548i_1",
+    "name": "read_file",
+    "content": [
+      {
+        "type": "text",
+        "text": "the harness runs in a worker, and the page is the interface.\n"
+      }
+    ],
+    "isError": false,
+    "seq": 5,
+    "version": 1
+  },
+  {
+    "kind": "tool_result",
+    "callId": "call_function_7gnq1mel548i_2",
+    "name": "list_dir",
+    "content": [
+      {
+        "type": "text",
+        "text": "adr-0008.txt\nnotes.txt"
+      }
+    ],
+    "isError": false,
+    "seq": 6,
+    "version": 1
+  },
+  {
+    "kind": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "<think>Let me read adr-0008.txt for context.</think>\n\nLet me check the other file for context."
+      }
+    ],
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "reasoning": 0
+    },
+    "stopReason": "toolUse",
+    "seq": 7,
+    "version": 1
+  },
+  {
+    "kind": "tool_call",
+    "callId": "call_6faf71b5ab604c6896722de0",
+    "name": "read_file",
+    "argumentsText": "{\"path\":\"adr-0008.txt\"}",
+    "seq": 8,
+    "version": 1
+  },
+  {
+    "kind": "tool_result",
+    "callId": "call_6faf71b5ab604c6896722de0",
+    "name": "read_file",
+    "content": [
+      {
+        "type": "text",
+        "text": "one permission seam, and it is asynchronous.\n"
+      }
+    ],
+    "isError": false,
+    "seq": 9,
+    "version": 1
+  },
+  {
+    "kind": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "<think>The user asks: \"tell me what the harness is\". Based on notes.txt: \"the harness runs in a worker, and the page is the interface.\" ADR-0008: \"one permission seam, and it is asynchronous.\"\n\nSo the harness = the thing that runs in a worker, with the page as interface, and there's a single asynchronous permission seam. Let me answer concisely.\n\nThe directory contains two files: adr-0008.txt and notes.txt.\n\nI should be honest that the files are terse — they give a partial description, not a full definition.</think>\n\n## The harness\n\nFrom the two files in the directory:\n\n**`notes.txt`** — \"the harness runs in a worker, and the page is the interface.\"\n\n**`adr-0008.txt`** — \"one permission seam, and it is asynchronous.\"\n\nSo the harness is:\n\n- **A worker-side runtime.** The actual execution happens in a worker (background thread/process), not on the page.\n- **Page-driven interface.** The page is the surface the user interacts with — it's a view/controller onto the worker, not where the work happens.\n- **A single asynchronous permission seam.** Per ADR-0008, there's exactly one point in the architecture where permissions are enforced, and it's non-blocking (async). Everything else presumably inherits from that one gate.\n\nThe combination implies: the page requests something → the request crosses the one async permission seam → the worker performs the action → the result comes back to the page. The seam being both *singular* and *asynchronous* is the notable design constraint — it's a chokepoint, so permission checks can't be bypassed by going around it, but any code that hits it must be written to not block.\n\nOne caveat: both files are one-liners, so this is the full extent of the documented description. If you need the concrete mechanics — which permission is being gated, what the worker's message contract looks like, or whether the page and worker communicate via `postMessage` — that detail isn't captured in these two files. Let me know if there are other sources to pull from."
+      }
+    ],
+    "usage": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "reasoning": 0
+    },
+    "stopReason": "stop",
+    "seq": 10,
+    "version": 1
+  }
+]

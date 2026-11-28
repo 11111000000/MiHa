@@ -51,6 +51,7 @@ import {
 	type RunFrame,
 } from "./frames.ts";
 import { createPortPair } from "./peer.ts";
+import { MODEL } from "./provider.ts";
 
 export interface WorkerOptions {
 	/**
@@ -80,9 +81,6 @@ export interface WorkerApp {
 	/** Takes a frame the page sent. Says whether it was one of ours. */
 	handle(frame: unknown): boolean;
 }
-
-/** The model the example asks for. */
-const MODEL = "MiniMax-M3";
 
 /** What the page's agent is told. */
 const SYSTEM =

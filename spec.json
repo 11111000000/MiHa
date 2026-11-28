@@ -436,18 +436,20 @@
       "id": "result-budget",
       "text": "Every tool result that reaches the transcript is budgeted at one seam - a rejection, a failure, a synthetic answer and a real result alike - and so is a partial result on the live progress channel: text over the budget keeps the head and the tail halves of it and carries a block naming the bytes actually dropped and the total, the kept bytes fit the budget, an under-budget result passes verbatim, a zero budget keeps nothing but the announcement, a nonsense budget is the default, Infinity disables, non-text blocks pass through, and the default is 8192",
       "scope": [
-        "src/core/budget.ts", "src/core/run.ts", "test/result-budget.test.ts"
+        "src/core/budget.ts", "src/core/run.ts",
+        "test/result-budget.test.ts", "scripts/measure-tasks.ts",
+        "scripts/tasks.txt"
       ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0009-policy-defaults.md",
         "section": null,
-        "digest": "045b9aa25c32b4aba474a9ef4dd5cb579f6aeb67c97644ff4ebb2e5c0f6da673",
+        "digest": "1b3fac6b7bf555f7b05250a4bc3850b98ccb3f3cad2fae9bbd6bdc0df5301e0d",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "ADR 0009 D50 extended with the live progress channel and the transcript/event/request oracles; the implementation and the verifier were both strengthened after two discriminator rounds",
-          "at": 1795387933,
-          "previous_digest": "dc166fc014b62aad8971c3b993971c31fcd6ca46eef46c523c6b1bf04be7bd62"
+          "reason": "The derivation now carries our own measurement: 113 real tasks against MiniMax-M2.5-highspeed (research 06). The defaults did not move - the measurement shows they are bounds that never fired, not targets.",
+          "at": 1795849173,
+          "previous_digest": "045b9aa25c32b4aba474a9ef4dd5cb579f6aeb67c97644ff4ebb2e5c0f6da673"
         }
       },
       "owner": "petr p.b.kosov@yandex.ru",
@@ -462,17 +464,20 @@
     {
       "id": "turn-limit-default",
       "text": "A harness that says nothing about turns makes at most 32 provider requests and ends with limitReached naming 32; a harness that states a limit is heard in every direction - below the default, above it, and zero, which makes no provider request at all; a nonsense limit is the default",
-      "scope": [ "src/core/run.ts", "test/defaults.test.ts" ],
+      "scope": [
+        "src/core/run.ts", "test/defaults.test.ts",
+        "scripts/measure-tasks.ts", "scripts/tasks.txt"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0009-policy-defaults.md",
         "section": null,
-        "digest": "045b9aa25c32b4aba474a9ef4dd5cb579f6aeb67c97644ff4ebb2e5c0f6da673",
+        "digest": "1b3fac6b7bf555f7b05250a4bc3850b98ccb3f3cad2fae9bbd6bdc0df5301e0d",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "ADR 0009 D51 extended with the nonsense-limit rule; the implementation and the verifier were strengthened after two discriminator rounds",
-          "at": 1795387933,
-          "previous_digest": "dc166fc014b62aad8971c3b993971c31fcd6ca46eef46c523c6b1bf04be7bd62"
+          "reason": "The derivation now carries our own measurement: 113 real tasks against MiniMax-M2.5-highspeed (research 06). The defaults did not move - the measurement shows they are bounds that never fired, not targets.",
+          "at": 1795849173,
+          "previous_digest": "045b9aa25c32b4aba474a9ef4dd5cb579f6aeb67c97644ff4ebb2e5c0f6da673"
         }
       },
       "owner": "petr p.b.kosov@yandex.ru",
@@ -515,8 +520,13 @@
         "kind": "madr",
         "path": "docs/adr/0009-policy-defaults.md",
         "section": null,
-        "digest": "045b9aa25c32b4aba474a9ef4dd5cb579f6aeb67c97644ff4ebb2e5c0f6da673",
-        "review": null
+        "digest": "1b3fac6b7bf555f7b05250a4bc3850b98ccb3f3cad2fae9bbd6bdc0df5301e0d",
+        "review": {
+          "by": "petr p.b.kosov@yandex.ru",
+          "reason": "The window's derivation now carries our own measurement (research 06): the longest run wrote 10 entries, so the 64-entry window never truncates a real run",
+          "at": 1795849240,
+          "previous_digest": "045b9aa25c32b4aba474a9ef4dd5cb579f6aeb67c97644ff4ebb2e5c0f6da673"
+        }
       },
       "owner": "petr p.b.kosov@yandex.ru",
       "requirements": [
@@ -535,18 +545,19 @@
       "text": "The core keeps the model's context within its budget: it measures the folded context in bytes, and when the context is over the budget the range that does not fit is collapsed into a digest entry, so what the provider receives fits the budget - unless the entries that follow alone exceed it, which the core cannot shrink. The journal keeps the whole history, the digest says what it swallowed, and what follows the collapse still pairs: a question and its answer",
       "scope": [
         "src/core/run.ts", "src/core/journal.ts",
-        "test/context-budget.test.ts"
+        "test/context-budget.test.ts", "scripts/measure-tasks.ts",
+        "scripts/tasks.txt"
       ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0010-context-policy.md",
         "section": null,
-        "digest": "95099df7d55f100194d827f7d0c2294ad6bab4d94b582e9c83ef54c1ce96c236",
+        "digest": "4fae07d86fa55346b16967c79149ad43a8b277ade928d4b9b575eb1ee13a2c62",
         "review": {
           "by": "petr p.b.kosov@yandex.ru",
-          "reason": "ADR 0010 D55 and D58 refined after a second discriminator round: the digest always has room to say what it swallowed, the collapse runs after everything the turn put into the context, and a swallowed question's answer is an orphan that is not projected",
-          "at": 1795431278,
-          "previous_digest": "9e4df310e1941378ea63244adec4984950f4f4cf3e7cd2517ecdf9870ced63d3"
+          "reason": "The derivation now carries our own measurement: 113 real tasks against MiniMax-M2.5-highspeed (research 06). The defaults did not move - the measurement shows they are bounds that never fired, not targets.",
+          "at": 1795849173,
+          "previous_digest": "95099df7d55f100194d827f7d0c2294ad6bab4d94b582e9c83ef54c1ce96c236"
         }
       },
       "owner": "petr p.b.kosov@yandex.ru",
@@ -595,7 +606,10 @@
     {
       "id": "trace-cassette-laws",
       "text": "The cassette records the provider's responses keyed by the request that asked for them, and a recorded run replays to the same journal: the replay answers the same requests with the same responses, a request the recording does not hold is reported as a divergence naming that request, and nothing but the provider's responses is recorded - the journal itself is the trace.",
-      "scope": [ "src/trace/", "test/trace.test.ts" ],
+      "scope": [
+        "src/trace/", "test/trace.test.ts", "test/trace-replay.test.ts",
+        "scripts/record-run.ts"
+      ],
       "source": {
         "kind": "madr",
         "path": "docs/adr/0012-cassette.md",

@@ -50,6 +50,11 @@ quarter of the whole bundle ceiling (30 000 B gzip, ADR 0004) — a single tool 
 should never approach the price of the harness itself. Head and tail, because a
 document's schema lives at its top and its summary at its bottom.
 
+**Measured on our own tasks** (113 of them, against a real model:
+[research 06](../research/06-measurements.md)): the largest result was 489 B, and this
+budget never fired once. It is a bound for a tool that returns a whole file, not a
+target.
+
 **Open edge, stated.** The budget governs text; image blocks pass through. Images are
 bounded by the host that produced them, not by this core. When image results appear in
 practice, this decision is revisited.
@@ -65,6 +70,12 @@ limit or `NaN` is nonsense and gets the default.
 127 tasks). Twice the median — a task and a full retry — rounds to 32: enough to finish
 the common task, low enough that a runaway loop is bounded before its quadratic token
 cost compounds.
+
+**Measured on our own tasks** (113 of them, against a real model:
+[research 06](../research/06-measurements.md)): the longest run took four turns, the
+median two. Our tasks are short, so this measurement does not move the limit — it
+confirms that the limit is a bound and not a wall. Lowering it below the literature's
+median would cut real work short.
 
 ### D52. The resident window defaults to 64 entries — decided, not yet enforced
 

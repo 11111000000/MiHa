@@ -7,3 +7,8 @@ bun.lock
 
 # the build output of the browser example
 examples/browser/dist/
+
+# the local secrets of the development runs: the provider's key lives here and
+# nowhere else. It is never committed, never bundled and never written to a file
+# by the harness itself.
+.env

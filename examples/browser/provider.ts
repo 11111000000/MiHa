@@ -17,8 +17,15 @@ import type { ProviderFn } from "../../src/llm/index.ts";
 /** The base URL of the OpenAI-compatible path. */
 export const MINIMAX_BASE_URL = "https://api.minimax.io/v1";
 
-/** The model the example asks for. */
-export const MODEL = "MiniMax-M3";
+/**
+ * The model the example asks for.
+ *
+ * The cheapest and fastest of the models this account may use: MiniMax-M2 and
+ * MiniMax-M2.1 are gone from the API, M3.1-Flash refuses every request without
+ * thinking, and the M2.5 tier answers a tool call in about a second. The flagship
+ * M3 is four times the price of the Flash tier and buys nothing a harness needs.
+ */
+export const MODEL = "MiniMax-M2.5-highspeed";
 
 /** The provider's knobs, handed to the wire verbatim. */
 export const MINIMAX_OPTIONS: Readonly<Record<string, unknown>> = {

@@ -20,10 +20,17 @@
 # Without MINIMAX_API_KEY there is nothing to check, so the script says so and
 # fails: a check that passes without the thing it checks proves nothing.
 
+# The repo-local secrets: the provider's key, read from .env when it is there.
+if [ -f "$(dirname "$0")/../.env" ]; then
+  set -a
+  . "$(dirname "$0")/../.env"
+  set +a
+fi
+
 set -e
 
 BASE_URL="${MINIMAX_BASE_URL:-https://api.minimax.io/v1}"
-MODEL="${MINIMAX_MODEL:-MiniMax-M3}"
+MODEL="${MINIMAX_MODEL:-MiniMax-M2.5-highspeed}"
 
 if [ -z "${MINIMAX_API_KEY:-}" ]; then
 	echo "minimax-smoke: MINIMAX_API_KEY is not set, so there is no key to check" >&2

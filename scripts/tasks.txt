@@ -1,0 +1,117 @@
+# The tasks the measurement runs.
+# One task per line; the harness measures what each of them costs.
+# The tools are the example's own: read_file, list_dir, echo.
+
+read notes.txt and tell me what it says
+what is in notes.txt
+read the file notes.txt and summarize it in one sentence
+open notes.txt and quote the first line
+read notes.txt
+please read notes.txt and explain it
+read notes.txt and count the words
+read notes.txt and list its sentences
+read notes.txt and say whether it mentions a worker
+read notes.txt and answer in Russian
+read adr-0008.txt and tell me what it is about
+what does adr-0008.txt say
+open adr-0008.txt and summarize it
+read adr-0008.txt and quote it exactly
+read adr-0008.txt and say how many lines it has
+read adr-0008.txt and explain the seam it mentions
+list the files of the directory
+what files are there
+show me the directory listing
+list the directory
+list the files and tell me how many there are
+list the directory and say which file is bigger
+list the files of the page's directory
+list_dir please
+what do you see in the folder
+list the files and read the first one
+list the directory, then read notes.txt
+list the directory and summarize every file you find
+list the files and read each of them
+list the directory and tell me what adr-0008.txt contains
+read notes.txt and adr-0008.txt and compare them
+read both files and tell me the difference
+read notes.txt, then list the directory, then answer
+read notes.txt and list_dir and give me a summary
+read the notes and list the directory
+read notes.txt, list the directory, read adr-0008.txt
+list the files, read notes.txt, and tell me what they say about the harness
+read the two files and write one paragraph about them
+echo hello
+say hello back to me
+echo the text "the harness runs in a worker"
+repeat after me: the harness is small
+echo hello and then list the directory
+echo "hi" and read notes.txt
+echo hello, then read notes.txt, then tell me what it says
+echo hello and list the files
+say hello and then read the file adr-0008.txt
+read notes.txt and echo its first word
+list the directory and echo the number of files you found
+read notes.txt, echo "done", and summarize
+echo "one" then echo "two" then echo "three"
+read adr-0008.txt and echo the word "seam"
+list the files, read notes.txt, echo "read", and answer in one line
+echo goodbye and then tell me what you can do
+read notes.txt twice and tell me whether the answers differ
+read notes.txt, list the directory, and read adr-0008.txt
+read the file notes.txt and the file adr-0008.txt and summarize both
+list the directory twice and say if the listings agree
+echo "test" and then read notes.txt
+read notes.txt and quote the whole file
+list the directory and read every file you find
+read notes.txt and count its characters
+read notes.txt and say how many words it has
+list the files and say which one is the shortest
+read adr-0008.txt and explain what a seam is
+read notes.txt and tell me what the harness is
+read adr-0008.txt and tell me what a permission seam is
+list the directory and describe what the application is
+read notes.txt and then list_dir
+read adr-0008.txt then echo "read" then answer
+echo "start", list the directory, read notes.txt, and give a summary
+read notes.txt and answer the question "what runs in the worker?"
+list the directory and answer "what files exist?"
+read adr-0008.txt and answer the question "how many seams?"
+echo "one" and read notes.txt
+read notes.txt, then say whether the file mentions a worker
+list the files, read notes.txt, and answer in Russian
+read both files and list the differences in one line
+echo "the harness is small" and list the directory
+read notes.txt and summarize it for a five year old
+list the directory and describe each file
+read adr-0008.txt and summarize it for a five year old
+read notes.txt and adr-0008.txt, then say which is longer
+echo "done" and tell me what you read
+list the directory, read everything, and summarize
+read notes.txt and then answer with the word "ok"
+read adr-0008.txt and then answer with the word "ok"
+echo "ok" and then read notes.txt
+list the files and answer with their names
+read notes.txt, list the directory, and answer with the names
+echo "hi" and answer "hi" back
+read notes.txt and answer with a question of your own
+list the directory and ask me which file to read
+read adr-0008.txt and ask me a question about it
+echo "hello world" and explain what it means
+read notes.txt and explain what the page is
+list the directory and explain what a worker is
+read adr-0008.txt and explain what an asynchronous seam is
+echo "the harness is small" and explain why
+read notes.txt and give me three bullet points
+list the files and give me three bullet points
+read adr-0008.txt and give me three bullet points
+echo "one", "two", "three" in three calls
+read notes.txt, then list the directory, then echo "finished"
+list the directory, read notes.txt, then echo "finished"
+read adr-0008.txt, list the directory, then echo "finished"
+read notes.txt and list the directory and echo "finished"
+echo "hello" three times
+read the same file twice and compare
+list the directory twice and compare
+read notes.txt and say how many files the directory has
+list the directory and say how many files it has
+read adr-0008.txt and say how many files the directory has

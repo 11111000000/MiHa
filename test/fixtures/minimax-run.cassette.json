@@ -1,0 +1,518 @@
+{
+  "version": 1,
+  "responses": {
+    "eafd1bbc737b2aca": [
+      [
+        {
+          "type": "text_delta",
+          "delta": "I'll"
+        },
+        {
+          "type": "text_delta",
+          "delta": " start by reading the notes and listing the directory."
+        },
+        {
+          "type": "tool_call_start",
+          "id": "call_function_7gnq1mel548i_1",
+          "name": "read_file"
+        },
+        {
+          "type": "tool_arguments_delta",
+          "id": "call_function_7gnq1mel548i_1",
+          "delta": "{\"path\": \"notes.txt\"}"
+        },
+        {
+          "type": "tool_call_start",
+          "id": "call_function_7gnq1mel548i_2",
+          "name": "list_dir"
+        },
+        {
+          "type": "tool_arguments_delta",
+          "id": "call_function_7gnq1mel548i_2",
+          "delta": "{}"
+        },
+        {
+          "type": "done",
+          "stopReason": "toolUse",
+          "usage": {
+            "input": 595,
+            "output": 51,
+            "cacheRead": 578,
+            "cacheWrite": 0,
+            "reasoning": 0
+          }
+        }
+      ]
+    ],
+    "bc04f3db90c2d1a3": [
+      [
+        {
+          "type": "text_delta",
+          "delta": "<think>Let me read adr-0008"
+        },
+        {
+          "type": "text_delta",
+          "delta": ".txt for context."
+        },
+        {
+          "type": "text_delta",
+          "delta": "</think>\n\nLet me check the oth"
+        },
+        {
+          "type": "text_delta",
+          "delta": "er file for context."
+        },
+        {
+          "type": "tool_call_start",
+          "id": "call_6faf71b5ab604c6896722de0",
+          "name": "read_file"
+        },
+        {
+          "type": "tool_arguments_delta",
+          "id": "call_6faf71b5ab604c6896722de0",
+          "delta": "{\"path\":\"adr"
+        },
+        {
+          "type": "tool_arguments_delta",
+          "id": "call_6faf71b5ab604c6896722de0",
+          "delta": "-0008.txt\""
+        },
+        {
+          "type": "tool_arguments_delta",
+          "id": "call_6faf71b5ab604c6896722de0",
+          "delta": "}"
+        },
+        {
+          "type": "done",
+          "stopReason": "toolUse",
+          "usage": {
+            "input": 675,
+            "output": 54,
+            "cacheRead": 512,
+            "cacheWrite": 0,
+            "reasoning": 12
+          }
+        }
+      ]
+    ],
+    "248f585894d21192": [
+      [
+        {
+          "type": "text_delta",
+          "delta": "<think>The user asks: \"tell"
+        },
+        {
+          "type": "text_delta",
+          "delta": " me what the harness"
+        },
+        {
+          "type": "text_delta",
+          "delta": " is\". Based on notes"
+        },
+        {
+          "type": "text_delta",
+          "delta": ".txt: \"the harness r"
+        },
+        {
+          "type": "text_delta",
+          "delta": "uns in a worker, and"
+        },
+        {
+          "type": "text_delta",
+          "delta": " the page is the int"
+        },
+        {
+          "type": "text_delta",
+          "delta": "erface.\" ADR-0008: \""
+        },
+        {
+          "type": "text_delta",
+          "delta": "one permission seam,"
+        },
+        {
+          "type": "text_delta",
+          "delta": " and it is asynchron"
+        },
+        {
+          "type": "text_delta",
+          "delta": "ous.\"\n\nSo the harnes"
+        },
+        {
+          "type": "text_delta",
+          "delta": "s = the thing that r"
+        },
+        {
+          "type": "text_delta",
+          "delta": "uns in a worker, wit"
+        },
+        {
+          "type": "text_delta",
+          "delta": "h the page as interf"
+        },
+        {
+          "type": "text_delta",
+          "delta": "ace, and there's a s"
+        },
+        {
+          "type": "text_delta",
+          "delta": "ingle asynchronous p"
+        },
+        {
+          "type": "text_delta",
+          "delta": "ermission seam. Let "
+        },
+        {
+          "type": "text_delta",
+          "delta": "me answer conc"
+        },
+        {
+          "type": "text_delta",
+          "delta": "isely.\n\nThe director"
+        },
+        {
+          "type": "text_delta",
+          "delta": "y contains two files"
+        },
+        {
+          "type": "text_delta",
+          "delta": ": adr-0008.txt and n"
+        },
+        {
+          "type": "text_delta",
+          "delta": "otes.txt.\n\nI should "
+        },
+        {
+          "type": "text_delta",
+          "delta": "be honest that the f"
+        },
+        {
+          "type": "text_delta",
+          "delta": "iles are terse — the"
+        },
+        {
+          "type": "text_delta",
+          "delta": "y give a partial des"
+        },
+        {
+          "type": "text_delta",
+          "delta": "cription, not a full"
+        },
+        {
+          "type": "text_delta",
+          "delta": " definition."
+        },
+        {
+          "type": "text_delta",
+          "delta": "</think>\n\n## The harness\n\nFrom"
+        },
+        {
+          "type": "text_delta",
+          "delta": " the two files in th"
+        },
+        {
+          "type": "text_delta",
+          "delta": "e directory:\n\n**`not"
+        },
+        {
+          "type": "text_delta",
+          "delta": "es.txt`** — \"the har"
+        },
+        {
+          "type": "text_delta",
+          "delta": "ness runs in a worke"
+        },
+        {
+          "type": "text_delta",
+          "delta": "r, and the page is t"
+        },
+        {
+          "type": "text_delta",
+          "delta": "he interface.\"\n\n**`a"
+        },
+        {
+          "type": "text_delta",
+          "delta": "dr-0008.txt`** — \"on"
+        },
+        {
+          "type": "text_delta",
+          "delta": "e permission seam, a"
+        },
+        {
+          "type": "text_delta",
+          "delta": "nd it is asynchronou"
+        },
+        {
+          "type": "text_delta",
+          "delta": "s.\"\n\nSo the"
+        },
+        {
+          "type": "text_delta",
+          "delta": " harness is:\n\n- **A "
+        },
+        {
+          "type": "text_delta",
+          "delta": "worker-side runtime."
+        },
+        {
+          "type": "text_delta",
+          "delta": "** The actual execut"
+        },
+        {
+          "type": "text_delta",
+          "delta": "ion happens in a wor"
+        },
+        {
+          "type": "text_delta",
+          "delta": "ker (background thre"
+        },
+        {
+          "type": "text_delta",
+          "delta": "ad/process), not on "
+        },
+        {
+          "type": "text_delta",
+          "delta": "the page.\n- **Page-d"
+        },
+        {
+          "type": "text_delta",
+          "delta": "riven interface.** T"
+        },
+        {
+          "type": "text_delta",
+          "delta": "he page is the surface"
+        },
+        {
+          "type": "text_delta",
+          "delta": " the user interacts "
+        },
+        {
+          "type": "text_delta",
+          "delta": "with — it's a view/c"
+        },
+        {
+          "type": "text_delta",
+          "delta": "ontroller onto the w"
+        },
+        {
+          "type": "text_delta",
+          "delta": "orker, not where the"
+        },
+        {
+          "type": "text_delta",
+          "delta": " work happens.\n- **A"
+        },
+        {
+          "type": "text_delta",
+          "delta": " single asynchronous"
+        },
+        {
+          "type": "text_delta",
+          "delta": " permission seam.** "
+        },
+        {
+          "type": "text_delta",
+          "delta": "Per ADR-0008, there'"
+        },
+        {
+          "type": "text_delta",
+          "delta": "s exactly one point in"
+        },
+        {
+          "type": "text_delta",
+          "delta": " the architecture wh"
+        },
+        {
+          "type": "text_delta",
+          "delta": "ere permissions are "
+        },
+        {
+          "type": "text_delta",
+          "delta": "enforced, and it's n"
+        },
+        {
+          "type": "text_delta",
+          "delta": "on-blocking (async)."
+        },
+        {
+          "type": "text_delta",
+          "delta": " Everything else pre"
+        },
+        {
+          "type": "text_delta",
+          "delta": "sumably inherits fro"
+        },
+        {
+          "type": "text_delta",
+          "delta": "m that one gate.\n\nTh"
+        },
+        {
+          "type": "text_delta",
+          "delta": "e combination implie"
+        },
+        {
+          "type": "text_delta",
+          "delta": "s: the page requests"
+        },
+        {
+          "type": "text_delta",
+          "delta": " something → the req"
+        },
+        {
+          "type": "text_delta",
+          "delta": "uest crosses the one"
+        },
+        {
+          "type": "text_delta",
+          "delta": " async permission se"
+        },
+        {
+          "type": "text_delta",
+          "delta": "am → the worker perf"
+        },
+        {
+          "type": "text_delta",
+          "delta": "orms the action → th"
+        },
+        {
+          "type": "text_delta",
+          "delta": "e result comes back "
+        },
+        {
+          "type": "text_delta",
+          "delta": "to the page. The sea"
+        },
+        {
+          "type": "text_delta",
+          "delta": "m being both *"
+        },
+        {
+          "type": "text_delta",
+          "delta": "singular* and *async"
+        },
+        {
+          "type": "text_delta",
+          "delta": "hronous* is the nota"
+        },
+        {
+          "type": "text_delta",
+          "delta": "ble design constrain"
+        },
+        {
+          "type": "text_delta",
+          "delta": "t — it's a chokepoin"
+        },
+        {
+          "type": "text_delta",
+          "delta": "t, so permission che"
+        },
+        {
+          "type": "text_delta",
+          "delta": "cks can't be bypasse"
+        },
+        {
+          "type": "text_delta",
+          "delta": "d by going around it"
+        },
+        {
+          "type": "text_delta",
+          "delta": ", but any code that hits"
+        },
+        {
+          "type": "text_delta",
+          "delta": " it must be written "
+        },
+        {
+          "type": "text_delta",
+          "delta": "to not block.\n\nOne c"
+        },
+        {
+          "type": "text_delta",
+          "delta": "aveat: both files ar"
+        },
+        {
+          "type": "text_delta",
+          "delta": "e one-liners, so thi"
+        },
+        {
+          "type": "text_delta",
+          "delta": "s is the full extent"
+        },
+        {
+          "type": "text_delta",
+          "delta": " of the documented d"
+        },
+        {
+          "type": "text_delta",
+          "delta": "escription. If you need"
+        },
+        {
+          "type": "text_delta",
+          "delta": " the concrete mechan"
+        },
+        {
+          "type": "text_delta",
+          "delta": "ics — which permissi"
+        },
+        {
+          "type": "text_delta",
+          "delta": "on is being gated, w"
+        },
+        {
+          "type": "text_delta",
+          "delta": "hat the worker's mes"
+        },
+        {
+          "type": "text_delta",
+          "delta": "sage contract looks "
+        },
+        {
+          "type": "text_delta",
+          "delta": "like, or whether the"
+        },
+        {
+          "type": "text_delta",
+          "delta": " page and worker com"
+        },
+        {
+          "type": "text_delta",
+          "delta": "municate via"
+        },
+        {
+          "type": "text_delta",
+          "delta": " `postMessage` — tha"
+        },
+        {
+          "type": "text_delta",
+          "delta": "t detail isn't captu"
+        },
+        {
+          "type": "text_delta",
+          "delta": "red in these two fil"
+        },
+        {
+          "type": "text_delta",
+          "delta": "es. Let me know if t"
+        },
+        {
+          "type": "text_delta",
+          "delta": "here are other sourc"
+        },
+        {
+          "type": "text_delta",
+          "delta": "es to pull from."
+        },
+        {
+          "type": "done",
+          "stopReason": "stop",
+          "usage": {
+            "input": 753,
+            "output": 432,
+            "cacheRead": 512,
+            "cacheWrite": 0,
+            "reasoning": 117
+          }
+        }
+      ]
+    ]
+  }
+}
